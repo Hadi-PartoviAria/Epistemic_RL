@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022/Debian) (preloaded format=pdflatex 2024.5.28)  17 FEB 2026 14:56
+This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022/Debian) (preloaded format=pdflatex 2024.5.28)  17 FEB 2026 15:39
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -890,52 +890,67 @@ s been already used, duplicate ignored
 l.504     \item \textbf
                        {HRL} (Hierarchical RL with Options)~\cite{sutton1999...
  <./results_new_rm/reward_curve.pdf>]
+
+LaTeX Warning: Citation `vanhasselt2016' on page 8 undefined on input line 508.
+
+
 <results_comparison/comparison_success.pdf, id=206, 722.7pt x 433.62pt>
 File: results_comparison/comparison_success.pdf Graphic file (type pdf)
 <use results_comparison/comparison_success.pdf>
 Package pdftex.def Info: results_comparison/comparison_success.pdf  used on inp
-ut line 513.
+ut line 515.
 (pdftex.def)             Requested size: 446.26582pt x 267.76312pt.
 <results_comparison/comparison_reward.pdf, id=207, 722.7pt x 433.62pt>
 File: results_comparison/comparison_reward.pdf Graphic file (type pdf)
 <use results_comparison/comparison_reward.pdf>
 Package pdftex.def Info: results_comparison/comparison_reward.pdf  used on inpu
-t line 520.
+t line 522.
 (pdftex.def)             Requested size: 446.26582pt x 267.76312pt.
- [8
+
+Overfull \hbox (1.82278pt too wide) in paragraph at lines 529--539
+ [][] 
+ []
+
+[8
 pdfTeX warning (ext4): destination with the same identifier (name{figure.2}) ha
 s been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.543 
-      
-pdfTeX warning (ext4): destination with the same identifier (name{table.1}) has
- been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.543 
+l.546 
        <./results/reward_curve.pdf>] [9
 pdfTeX warning (ext4): destination with the same identifier (name{figure.3}) ha
 s been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.739 
-       <./results_comparison/comparison_success.pdf>] [10
+l.552 \end{itemize}
+                   
+pdfTeX warning (ext4): destination with the same identifier (name{table.1}) has
+ been already used, duplicate ignored
+<argument> ...shipout:D \box_use:N \l_shipout_box 
+                                                  \__shipout_drop_firstpage_...
+l.552 \end{itemize}
+                    <./results_comparison/comparison_success.pdf>] [10
 pdfTeX warning (ext4): destination with the same identifier (name{figure.4}) ha
 s been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.747 \end{document}
+l.757 \end{document}
                      <./results_comparison/comparison_reward.pdf>]
 (./report_short.aux)
+
+LaTeX Warning: There were undefined references.
+
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
 Package rerunfilecheck Info: File `report_short.out' has not changed.
 (rerunfilecheck)             Checksum: 083291E96C33AB04EAABCD955B368462;3310.
  ) 
 Here is how much of TeX's memory you used:
- 24005 strings out of 477949
- 451777 string characters out of 5838092
+ 24008 strings out of 477949
+ 451819 string characters out of 5838092
  1868330 words of memory out of 5000000
- 43693 multiletter control sequences out of 15000+600000
+ 43694 multiletter control sequences out of 15000+600000
  526619 words of font info for 86 fonts, out of 8000000 for 9000
  59 hyphenation exceptions out of 8191
  84i,12n,80p,1038b,876s stack positions out of 10000i,1000n,20000p,200000b,200000s
@@ -952,15 +967,16 @@ m/cmr12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17
 sr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share
 /texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/share/texlive
 /texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf
--dist/fonts/type1/public/amsfonts/cm/cmti10.pfb></usr/share/texlive/texmf-dist/
-fonts/type1/public/amsfonts/cm/cmtt10.pfb></usr/share/texlive/texmf-dist/fonts/
-type1/public/amsfonts/cm/cmtt9.pfb></usr/share/texlive/texmf-dist/fonts/type1/p
-ublic/amsfonts/symbols/msam10.pfb></usr/share/texmf/fonts/type1/public/cm-super
-/sfrm1095.pfb>
-Output written on report_short.pdf (10 pages, 307984 bytes).
+-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/share/texlive/texmf-dist/f
+onts/type1/public/amsfonts/cm/cmti10.pfb></usr/share/texlive/texmf-dist/fonts/t
+ype1/public/amsfonts/cm/cmtt10.pfb></usr/share/texlive/texmf-dist/fonts/type1/p
+ublic/amsfonts/cm/cmtt9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/a
+msfonts/symbols/msam10.pfb></usr/share/texmf/fonts/type1/public/cm-super/sfrm10
+95.pfb>
+Output written on report_short.pdf (10 pages, 320948 bytes).
 PDF statistics:
- 433 PDF objects out of 1000 (max. 8388607)
- 244 compressed objects within 3 object streams
- 56 named destinations out of 1000 (max. 500000)
+ 445 PDF objects out of 1000 (max. 8388607)
+ 249 compressed objects within 3 object streams
+ 58 named destinations out of 1000 (max. 500000)
  201 words of extra memory for PDF output out of 10000 (max. 10000000)
 

@@ -1,13 +1,14 @@
 """
-3-Way Comparison Runner — QRM vs HRL vs HRL-RM on the Chop Cup Magic Trick.
+4-Way Comparison Runner — QRM vs HRL vs HRL-RM vs DDQN on the Chop Cup Magic Trick.
 
-Trains all three agents on the same environment, evaluates periodically,
+Trains all four agents on the same environment, evaluates periodically,
 and generates side-by-side comparison plots.
 
 Methods compared:
   1. QRM      — Q-Learning for Reward Machines (epistemic obs + RM, flat actions)
   2. HRL      — Hierarchical RL with options (physical obs only, no RM)
   3. HRL-RM   — Hierarchical RL + epistemic obs + RM (best of both)
+  4. DDQN     — Double Deep Q-Network (neural network, epistemic obs + RM)
 
 Usage:
     python run_comparison.py --episodes 1000 --max-steps 100 --max-limes 5 --seed 42
@@ -32,6 +33,7 @@ from reward_machine import RMState, RewardMachine
 from qrm import QRMAgent
 from hrl_agent import HRLAgent, SUBGOALS
 from herl_qrm import HERLQRMAgent
+from ddqn_agent import DDQNAgent, _obs_to_vector
 
 
 # ==========================================================================
@@ -174,6 +176,48 @@ def evaluate_herl_qrm(
             timeout = option_steps >= SUBGOALS[current_sg].max_steps
             if achieved or timeout or env.done:
                 current_sg = None
+
+        if RMState.UT in env.reward_machine.reached_states:
+            successes += 1
+        rewards_list.append(ep_reward)
+        lengths_list.append(step)
+
+    n = max(num_episodes, 1)
+    return {
+        "success_rate": successes / n,
+        "mean_reward": float(np.mean(rewards_list)),
+        "mean_length": float(np.mean(lengths_list)),
+    }
+
+
+def evaluate_ddqn(
+    env: ChopCupEnv,
+    agent: DDQNAgent,
+    num_episodes: int,
+    max_steps: int,
+    seed: int,
+) -> Dict:
+    """Evaluate DDQN with greedy policy."""
+    successes = 0
+    rewards_list: List[float] = []
+    lengths_list: List[int] = []
+
+    for ep in range(num_episodes):
+        random.seed(seed + ep)
+        env.reset()
+        obs_vec = _obs_to_vector(env)
+        ep_reward = 0.0
+        step = 0
+
+        while not env.done and step < max_steps:
+            available = env.get_available_actions()
+            if not available:
+                break
+            action = agent.get_policy_action(obs_vec, available)
+            _, _, reward, _, _ = env.step(action)
+            obs_vec = _obs_to_vector(env)
+            ep_reward += reward
+            step += 1
 
         if RMState.UT in env.reward_machine.reached_states:
             successes += 1
@@ -406,6 +450,78 @@ def train_herl_qrm(
     return stats
 
 
+def train_ddqn(
+    num_episodes: int,
+    max_steps: int,
+    eval_interval: int,
+    eval_episodes: int,
+    discount: float,
+    lr: float,
+    epsilon: float,
+    q_init: float,
+    enable_limes: bool,
+    max_limes: int,
+    seed: int,
+    **_extra,
+) -> List[Dict]:
+    """Train DDQN agent and return evaluation stats at regular intervals."""
+    import torch
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    env = ChopCupEnv(enable_limes=enable_limes, max_limes=max_limes, max_steps=max_steps)
+    eval_env = ChopCupEnv(enable_limes=enable_limes, max_limes=max_limes, max_steps=max_steps)
+
+    agent = DDQNAgent(
+        reward_machine=env.reward_machine,
+        discount=discount,
+        lr=1e-3,
+        epsilon_start=1.0,
+        epsilon_end=0.05,
+        epsilon_decay=500,
+        batch_size=64,
+        buffer_size=50_000,
+        target_update=100,
+    )
+
+    stats: List[Dict] = []
+    result = evaluate_ddqn(eval_env, agent, eval_episodes, max_steps, seed + 10000)
+    stats.append({"episode": 0, **result})
+
+    for ep in range(1, num_episodes + 1):
+        random.seed(seed + ep)
+        env.reset()
+        obs_vec = _obs_to_vector(env)
+        step = 0
+
+        while not env.done and step < max_steps:
+            available = env.get_available_actions()
+            if not available:
+                break
+
+            old_vec = obs_vec
+            action = agent.select_action(obs_vec, available)
+
+            _, _, reward, _, _ = env.step(action)
+            obs_vec = _obs_to_vector(env)
+            done = env.done
+
+            agent.store_transition(old_vec, action, reward, obs_vec, done)
+            if step % 4 == 0:
+                agent.train_step()
+            step += 1
+
+        agent.training_episodes = ep
+
+        if ep % eval_interval == 0:
+            result = evaluate_ddqn(eval_env, agent, eval_episodes, max_steps,
+                                   seed + 10000 + ep)
+            stats.append({"episode": ep, **result})
+
+    return stats
+
+
 # ==========================================================================
 # Multi-seed averaging
 # ==========================================================================
@@ -443,7 +559,7 @@ def run_multi_seed(
 
 
 # ==========================================================================
-# Plotting — 3-way comparison
+# Plotting — 4-way comparison
 # ==========================================================================
 
 def plot_comparison(
@@ -451,8 +567,9 @@ def plot_comparison(
     hrl_data: Tuple,
     herl_data: Tuple,
     output_dir: str,
+    ddqn_data: Tuple = None,
 ) -> None:
-    """Generate 3-way comparison plots.
+    """Generate comparison plots.
 
     Each *_data tuple: (episodes, mean_success, std_success,
                          mean_reward, std_reward,
@@ -477,23 +594,30 @@ def plot_comparison(
         "qrm":  "#2196F3",   # blue  — user's method
         "hrl":  "#FF9800",   # orange
         "herl": "#4CAF50",   # green
+        "ddqn": "#E91E63",   # pink
     }
     labels = {
         "qrm":  "QRM",
         "hrl":  "HRL",
         "herl": "HRL-RM",
+        "ddqn": "DDQN",
     }
 
+    # Build datasets list (3 or 4 methods)
+    all_datasets = [
+        (q_ep, qrm_data, "qrm"),
+        (r_ep, hrl_data, "hrl"),
+        (h_ep, herl_data, "herl"),
+    ]
+    if ddqn_data is not None:
+        d_ep = np.array(ddqn_data[0])
+        all_datasets.append((d_ep, ddqn_data, "ddqn"))
+
     def _plot_metric(ax, metric_idx, ylabel, title, ylim=None):
-        """Plot a single metric for all 3 methods.
+        """Plot a single metric for all methods.
         metric_idx: 0=success, 1=reward, 2=length (indexing mean/std pairs)
         """
-        datasets = [
-            (q_ep, qrm_data, "qrm"),
-            (r_ep, hrl_data, "hrl"),
-            (h_ep, herl_data, "herl"),
-        ]
-        for ep_arr, data, key in datasets:
+        for ep_arr, data, key in all_datasets:
             mean = data[1 + metric_idx * 2]
             std  = data[2 + metric_idx * 2]
             ax.plot(ep_arr, mean, color=colors[key], linewidth=2, label=labels[key])
@@ -540,14 +664,21 @@ def plot_comparison(
     _plot_metric(axes[0, 1], 1, "Mean Reward", "Total Reward")
     _plot_metric(axes[1, 0], 2, "Mean Steps", "Episode Length")
 
-    # 4th panel: reward gap (QRM − HRL)
+    # 4th panel: reward gap (QRM − others)
     ax = axes[1, 1]
-    min_len = min(len(q_rw), len(r_rw), len(h_rw))
+    all_rw = [q_rw, r_rw, h_rw]
+    if ddqn_data is not None:
+        all_rw.append(ddqn_data[3])
+    min_len = min(len(rw) for rw in all_rw)
     ep_c = np.array(q_ep[:min_len])
     gap_hrl  = np.array(q_rw[:min_len]) - np.array(r_rw[:min_len])
     gap_herl = np.array(q_rw[:min_len]) - np.array(h_rw[:min_len])
     ax.plot(ep_c, gap_hrl,  color=colors["hrl"],  linewidth=2, label="QRM − HRL")
     ax.plot(ep_c, gap_herl, color=colors["herl"], linewidth=2, label="QRM − HRL-RM")
+    if ddqn_data is not None:
+        d_rw = ddqn_data[3]
+        gap_ddqn = np.array(q_rw[:min_len]) - np.array(d_rw[:min_len])
+        ax.plot(ep_c, gap_ddqn, color=colors["ddqn"], linewidth=2, label="QRM − DDQN")
     ax.axhline(y=0, color="gray", linestyle="--", alpha=0.5)
     ax.set_title("Reward Gap", fontsize=12)
     ax.set_xlabel("Training Episode")
@@ -555,7 +686,10 @@ def plot_comparison(
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
 
-    fig.suptitle("Chop Cup — QRM vs HRL vs HRL-RM", fontsize=14, fontweight="bold")
+    title = "Chop Cup — QRM vs HRL vs HRL-RM"
+    if ddqn_data is not None:
+        title += " vs DDQN"
+    fig.suptitle(title, fontsize=14, fontweight="bold")
     fig.tight_layout()
     fig.savefig(out / "comparison_dashboard.png", dpi=150)
     fig.savefig(out / "comparison_dashboard.pdf")
@@ -586,7 +720,7 @@ def save_stats(stats: List[Dict], path: Path, method_name: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="3-way comparison: QRM vs HRL vs HRL-RM on the Chop Cup."
+        description="4-way comparison: QRM vs HRL vs HRL-RM vs DDQN on the Chop Cup."
     )
     parser.add_argument("--episodes", type=int, default=1000)
     parser.add_argument("--eval-interval", type=int, default=10)
@@ -620,7 +754,7 @@ def main():
     )
 
     print("=" * 70)
-    print("  Chop Cup — QRM vs HRL vs HRL-RM Comparison")
+    print("  Chop Cup — QRM vs HRL vs HRL-RM vs DDQN Comparison")
     print("=" * 70)
     print(f"  Episodes:     {args.episodes}")
     print(f"  Max steps:    {args.max_steps}")
@@ -631,7 +765,7 @@ def main():
     print("=" * 70)
 
     # --- 1. QRM (user's method) ---
-    print("\n  [1/3] Training QRM (epistemic + Reward Machine, flat actions)...")
+    print("\n  [1/4] Training QRM (epistemic + Reward Machine, flat actions)...")
     qrm_data = run_multi_seed(
         train_qrm,
         num_seeds=args.seeds,
@@ -641,7 +775,7 @@ def main():
     print(f"    Final success: {qrm_data[1][-1]:.2%}  |  reward: {qrm_data[3][-1]:.1f}")
 
     # --- 2. HRL baseline ---
-    print("\n  [2/3] Training HRL (options, physical only)...")
+    print("\n  [2/4] Training HRL (options, physical only)...")
     hrl_kwargs = {**common_kwargs, "meta_epsilon": args.meta_epsilon}
     hrl_data = run_multi_seed(
         train_hrl,
@@ -651,8 +785,8 @@ def main():
     )
     print(f"    Final success: {hrl_data[1][-1]:.2%}  |  reward: {hrl_data[3][-1]:.1f}")
 
-    # --- 3. HERL-QRM ---
-    print("\n  [3/3] Training HRL-RM (options + epistemic + RM)...")
+    # --- 3. HRL-RM ---
+    print("\n  [3/4] Training HRL-RM (options + epistemic + RM)...")
     herl_kwargs = {**common_kwargs, "meta_epsilon": args.meta_epsilon}
     herl_data = run_multi_seed(
         train_herl_qrm,
@@ -662,9 +796,19 @@ def main():
     )
     print(f"    Final success: {herl_data[1][-1]:.2%}  |  reward: {herl_data[3][-1]:.1f}")
 
+    # --- 4. DDQN ---
+    print("\n  [4/4] Training DDQN (neural network, epistemic obs + RM)...")
+    ddqn_data = run_multi_seed(
+        train_ddqn,
+        num_seeds=args.seeds,
+        base_seed=args.seed,
+        **common_kwargs,
+    )
+    print(f"    Final success: {ddqn_data[1][-1]:.2%}  |  reward: {ddqn_data[3][-1]:.1f}")
+
     # --- Save per-method CSV ---
-    eps = qrm_data[0]
-    for data, name in [(qrm_data, "qrm"), (hrl_data, "hrl"), (herl_data, "herl_qrm")]:
+    for data, name in [(qrm_data, "qrm"), (hrl_data, "hrl"),
+                       (herl_data, "herl_qrm"), (ddqn_data, "ddqn")]:
         rows = [
             {"episode": e, "success_rate": s, "mean_reward": r, "mean_length": l}
             for e, s, r, l in zip(data[0], data[1], data[3], data[5])
@@ -673,7 +817,7 @@ def main():
 
     # --- Info JSON ---
     info = {
-        "methods": ["QRM", "HRL", "HRL-RM"],
+        "methods": ["QRM", "HRL", "HRL-RM", "DDQN"],
         "episodes": args.episodes,
         "max_steps": args.max_steps,
         "max_limes": args.max_limes,
@@ -688,15 +832,17 @@ def main():
         "qrm_final_success": float(qrm_data[1][-1]),
         "hrl_final_success": float(hrl_data[1][-1]),
         "herl_final_success": float(herl_data[1][-1]),
+        "ddqn_final_success": float(ddqn_data[1][-1]),
         "qrm_final_reward": float(qrm_data[3][-1]),
         "hrl_final_reward": float(hrl_data[3][-1]),
         "herl_final_reward": float(herl_data[3][-1]),
+        "ddqn_final_reward": float(ddqn_data[3][-1]),
     }
     with open(out / "comparison.info.json", "w") as f:
         json.dump(info, f, indent=4)
 
     # --- Plots ---
-    plot_comparison(qrm_data, hrl_data, herl_data, args.output)
+    plot_comparison(qrm_data, hrl_data, herl_data, args.output, ddqn_data=ddqn_data)
 
     # --- Summary table ---
     print("\n" + "=" * 70)
@@ -706,7 +852,8 @@ def main():
     print("-" * 70)
     for label, data in [("QRM", qrm_data),
                         ("HRL", hrl_data),
-                        ("HRL-RM", herl_data)]:
+                        ("HRL-RM", herl_data),
+                        ("DDQN", ddqn_data)]:
         print(f"  {label:<25} {data[1][-1]:>9.2%} {data[3][-1]:>10.1f} {data[5][-1]:>10.1f}")
     print("=" * 70)
 

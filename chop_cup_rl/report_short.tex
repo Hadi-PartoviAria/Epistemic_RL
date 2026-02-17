@@ -498,27 +498,29 @@ Each plateau corresponds to the agent learning to squeeze one additional lime cy
 \subsection{Baseline Comparison}
 % ===========================================================================
 
-We compare QRM against two baselines to evaluate the contribution of epistemic reasoning and reward machine structure:
+We compare QRM against three baselines to evaluate the contribution of epistemic reasoning, reward machine structure, and function approximation:
 
 \begin{enumerate}
     \item \textbf{HRL} (Hierarchical RL with Options)~\cite{sutton1999}: Two-level hierarchy where a meta-controller selects among 5 subgoals (\emph{palm}, \emph{show\_ball}, \emph{reset}, \emph{load\_lime}, \emph{show\_lime}) and a controller executes primitive actions to achieve each subgoal. Uses SMDP Q-learning with $\gamma^k$ discounting. The agent observes \emph{physical state only} (10 features) --- no beliefs, no RM state.
 
     \item \textbf{HRL-RM} (Hierarchical RL with Reward Machines): The same two-level option hierarchy as HRL, but with the \emph{full epistemic observation} (physical + explicit/implicit beliefs + RM state). This ablation tests whether temporal abstraction adds value when combined with epistemic reasoning.
+
+    \item \textbf{DDQN} (Double Deep Q-Network)~\cite{vanhasselt2016}: A neural network baseline using a two-layer MLP (128 hidden units) to approximate $Q(s,a)$. Uses the same epistemic observation as QRM (physical fluents + explicit beliefs + RM state index) encoded as a 19-dimensional float vector. The online network selects actions while a separate target network (updated every 100 steps) evaluates them, reducing overestimation bias. Trained with experience replay (buffer size 50k, batch size 64), $\varepsilon$-greedy exploration decaying from 1.0 to 0.05, and Adam optimiser ($\text{lr}=10^{-3}$).
 \end{enumerate}
 
-All three methods were trained for 1000 episodes (\texttt{max\_steps}$=100$, \texttt{max\_limes}$=5$, $\gamma = 0.9$, $\alpha = 0.1$, $\varepsilon = 0.1$) and averaged over 5 random seeds.
+All four methods were trained for 1000 episodes (\texttt{max\_steps}$=100$, \texttt{max\_limes}$=5$, $\gamma = 0.9$) and averaged over 5 random seeds. QRM, HRL, and HRL-RM use tabular Q-learning ($\alpha = 0.1$, $\varepsilon = 0.1$); DDQN uses neural function approximation.
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.95\textwidth]{results_comparison/comparison_success.pdf}
-\caption{Success rate comparison: QRM vs HRL vs HRL-RM (5-seed average).}
+\caption{Success rate comparison: QRM vs HRL vs HRL-RM vs DDQN (5-seed average).}
 \label{fig:comparison_success}
 \end{figure}
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.95\textwidth]{results_comparison/comparison_reward.pdf}
-\caption{Reward comparison: QRM vs HRL vs HRL-RM (5-seed average).}
+\caption{Reward comparison: QRM vs HRL vs HRL-RM vs DDQN (5-seed average).}
 \label{fig:comparison_reward}
 \end{figure}
 
@@ -528,9 +530,10 @@ All three methods were trained for 1000 episodes (\texttt{max\_steps}$=100$, \te
 \toprule
 \textbf{Method} & \textbf{Success Rate} & \textbf{Mean Reward} & \textbf{Observation Space} \\
 \midrule
-\textbf{QRM with Epistemic logic} & \textbf{100\%} & \textbf{46.7} & Epistemic + RM \\
-HRL-RM & 100\% & 40.0 & Epistemic + RM \\
-HRL & 33\% & 0.3 & Physical only  \\
+\textbf{QRM with Epistemic logic} & \textbf{100\%} & \textbf{49.0} & Epistemic + RM (tabular) \\
+HRL-RM & 100\% & 43.0 & Epistemic + RM (tabular) \\
+HRL & 40\% & 0.4 & Physical only (tabular) \\
+DDQN & 20\% & 0.2 & Epistemic + RM (neural) \\
 \bottomrule
 \end{tabular}
 \caption{Final performance after 1000 training episodes (5-seed average).}
@@ -539,9 +542,11 @@ HRL & 33\% & 0.3 & Physical only  \\
 
 \textbf{Key findings:}
 \begin{itemize}
-    \item \textbf{Epistemic reasoning is essential.} HRL with physical-only observation achieves only 33\% success, demonstrating that the trick cannot be reliably learned without access to belief fluents. The agent cannot observe \emph{what the Observer believes}, so it cannot learn to manipulate those beliefs.
+    \item \textbf{Epistemic reasoning is essential.} HRL with physical-only observation achieves only 40\% success, demonstrating that the trick cannot be reliably learned without access to belief fluents. The agent cannot observe \emph{what the Observer believes}, so it cannot learn to manipulate those beliefs.
 
-    \item \textbf{QRM outperforms the hierarchical variants.} Although both QRM and HRL-RM reach 100\% success, QRM achieves higher reward (46.7 vs 40.0) because flat primitive actions allow finer-grained optimization of the lime loop timing. The SMDP discounting in hierarchical methods ($\gamma^k$ for $k$-step options) reduces the effective credit signal for multi-step options.
+    \item \textbf{QRM outperforms the hierarchical variants.} Although both QRM and HRL-RM reach 100\% success, QRM achieves higher reward (49.0 vs 43.0) because flat primitive actions allow finer-grained optimization of the lime loop timing. The SMDP discounting in hierarchical methods ($\gamma^k$ for $k$-step options) reduces the effective credit signal for multi-step options.
+
+    \item \textbf{Tabular methods outperform neural approximation.} DDQN achieves only 20\% success despite receiving the same epistemic observation as QRM. The Chop Cup state space is compact enough for exact tabular representation, and the discrete, structured nature of belief-state transitions makes it poorly suited for smooth function approximation. Neural networks struggle with the sharp, logic-driven transitions characteristic of epistemic domains.
 
     \item \textbf{Temporal abstraction adds limited value in this domain.} The Chop Cup trick has a short action horizon (4--10 steps per phase), so the overhead of option selection does not pay off. Hierarchical methods are better suited for domains with much longer horizons where primitive-action RL struggles with exploration.
 \end{itemize}
@@ -741,6 +746,11 @@ N.~C.~Rabinowitz, F.~Perbet, H.~F.~Song, C.~Zhang, S.~M.~A.~Eslami, and M.~Botvi
 R.~S.~Sutton, D.~Precup, and S.~Singh.
 \newblock Between MDPs and Semi-MDPs: A Framework for Temporal Abstraction in Reinforcement Learning.
 \newblock {\em Artificial Intelligence}, 112(1--2):181--211, 1999.
+
+\bibitem{vanhasselt2016}
+H.~van Hasselt, A.~Guez, and D.~Silver.
+\newblock Deep Reinforcement Learning with Double Q-Learning.
+\newblock In {\em Proceedings of AAAI 2016}, pages 2094--2100, 2016.
 
 \end{thebibliography}
 

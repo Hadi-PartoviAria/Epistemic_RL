@@ -2,7 +2,8 @@
     "methods": [
         "QRM",
         "HRL",
-        "HRL-RM"
+        "HRL-RM",
+        "DDQN"
     ],
     "episodes": 1000,
     "max_steps": 100,
@@ -18,7 +19,9 @@
     "qrm_final_success": 1.0,
     "hrl_final_success": 0.4,
     "herl_final_success": 1.0,
+    "ddqn_final_success": 0.2,
     "qrm_final_reward": 49.0,
     "hrl_final_reward": 0.4,
-    "herl_final_reward": 43.0
+    "herl_final_reward": 43.0,
+    "ddqn_final_reward": 0.2
 }

@@ -1,0 +1,12 @@
+[package]
+name = "bbases"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bbases_derive = { path = "../bbases_derive" }
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+nom = "7.1"
+frozenset = "0.2"
+cat_solver = "3.1.1"

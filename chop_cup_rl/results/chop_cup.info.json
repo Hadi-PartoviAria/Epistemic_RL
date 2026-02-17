@@ -1,0 +1,16 @@
+{
+    "input": "chop_cup_rl (QRM \u2014 Icarte et al. 2018)",
+    "algorithm": "QRM (Q-Learning for Reward Machines)",
+    "seed": 42,
+    "discount_factor": 0.9,
+    "learning_rate": 0.1,
+    "epsilon": 0.1,
+    "q_init": 0.0,
+    "num_episodes": 1000,
+    "max_episode_len": 100,
+    "enable_limes": true,
+    "max_limes": 5,
+    "evaluation_interval": 1,
+    "evaluation_num_episodes": 100,
+    "evaluation_max_episode_len": 100
+}

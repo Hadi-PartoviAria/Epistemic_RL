@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+
+import argparse
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+parser = argparse.ArgumentParser()
+parser.add_argument('file', nargs='+', type=argparse.FileType('r'))
+parser.add_argument('-x', '--x_axis', type=str, default='episode')
+parser.add_argument('-y', '--y_axis', type=str, default='reward')
+parser.add_argument('-n', '--split_n', type=int, default=1)
+parser.add_argument('-l', '--labels', type=str, nargs='+')
+parser.add_argument('-yl', '--ylabels', type=str)
+parser.add_argument('-c', '--crop_after', type=int)
+parser.add_argument('-p', '--paper', action='store_true')
+parser.add_argument('-o', '--output', type=str)
+args = parser.parse_args()
+
+names = []
+dfs = []
+for i, f in enumerate(args.file):
+    df = pd.read_csv(f, header=0)
+    df = pd.eval(f'res123 = {args.y_axis}', target=df)
+    df = df.set_index([args.x_axis])
+    df = df['res123']
+    if args.crop_after is not None:
+        df = df[:args.crop_after]
+    if i % args.split_n == 0:
+        names.append(f.name)
+        dfs.append(df)
+    else:
+        dfs[-1] = pd.concat((dfs[-1], df), axis=0)
+
+toplot = pd.concat(
+    dfs, axis=1, keys=args.labels if args.labels is not None else names)
+print(toplot)
+
+plt.figure(figsize=(4, 3) if args.paper else (16, 9), facecolor='none')
+
+sns.set_theme()
+sns.set_context("paper" if args.paper else "talk")
+ax = sns.lineplot(toplot, dashes=False, errorbar='sd')
+ax.set(xlabel=None if args.paper else "episodes")
+ax.set(ylabel=args.y_axis if args.ylabels is None else args.ylabels)
+
+if args.output is not None:
+    ax.get_figure().savefig(args.output, bbox_inches='tight', dpi=600)
+else:
+    plt.show()

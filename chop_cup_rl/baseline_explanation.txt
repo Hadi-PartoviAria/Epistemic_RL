@@ -1,0 +1,270 @@
+================================================================================
+  BASELINE METHODS: HRL & HERL-QRM — Explanation and Comparison
+================================================================================
+
+This document explains the two baseline methods (HRL and HERL-QRM), how they
+are implemented, and how they compare with our primary method (QRM with
+epistemic reasoning).
+
+
+================================================================================
+1. OUR METHOD: QRM (Q-Learning for Reward Machines)
+================================================================================
+
+What it is:
+  QRM (Icarte et al., ICML 2018) is a flat RL method that uses a Reward
+  Machine to decompose a task into phases. The agent selects primitive actions
+  (lift_cup, place_cup, palm_ball, reveal_hand, load_lime) at every step.
+
+Observation space:
+  Full epistemic observation = physical state + explicit beliefs (Δ) + implicit
+  beliefs (□) + RM state. This gives the agent ~18 features including:
+    - Physical: mag_stuck, mag_visible, reg_under, reg_table, reg_hand,
+                cup_down, ball_visible, lime_cup, lime_visible, lime_count
+    - Beliefs:  Δ(reg_under), Δ(reg_table), Δ(reg_hand), Δ(mag_stuck),
+                Δ(mag_visible), □(reg_under), □(reg_hand), □(mag_stuck)
+
+How epistemic logic is used:
+  - Explicit beliefs (Δφ) are maintained as state fluents. Each action has
+    belief-update effects defined in the JSON specification. For example,
+    palm_ball transfers the Observer's belief about reg_under via
+    Δ(reg_under) := Δ(reg_table) — the Observer thinks the ball went under
+    the cup because they saw it on the table.
+  - Implicit beliefs (□φ) are computed via SAT-based entailment. The system
+    builds a propositional knowledge base from CommonGround (background
+    knowledge) and the Observer's explicit beliefs, then checks if φ is
+    entailed using DPLL: □φ iff CG ∧ ExplicitBeliefs ∧ ¬φ is UNSAT.
+  - The RM transitions use epistemic conditions, e.g., transition a (u0→u1)
+    requires Δ(reg_under)=True, and transition b (u1→u2) requires
+    □(reg_hand)=True. These conditions can ONLY be evaluated with access
+    to the belief state.
+
+Q-table structure:
+  Single flat Q-table indexed by (env_observation, rm_state) → action → value.
+  One Q-learning update per real transition.
+
+Key advantage:
+  The agent sees the full epistemic state, so it can learn to manipulate
+  beliefs. The RM decomposes the sparse reward into learnable phases.
+
+Implementation: qrm.py (195 lines)
+
+
+================================================================================
+2. BASELINE 1: HRL (Hierarchical RL with Options)
+================================================================================
+
+What it is:
+  HRL (Sutton, Precup, Singh 1999) is a two-level hierarchical method based
+  on the Options framework. Instead of selecting primitive actions, a high-level
+  "meta-controller" selects temporally extended macro-actions (options/subgoals),
+  and a low-level "controller" executes primitive actions to achieve each
+  subgoal.
+
+Architecture:
+  Level 1 — Meta-controller (SMDP Q-learning):
+    Selects among 5 subgoals:
+      0. palm      — Goal: reg_hand = True (ball in magician's hand)
+      1. show_ball — Goal: ball_visible = True (ball visible under cup)
+      2. reset     — Goal: cup_down ∧ ¬ball_visible ∧ ¬lime_visible
+      3. load_lime — Goal: lime_cup = True (lime loaded under cup)
+      4. show_lime — Goal: lime_visible = True (lime revealed)
+    Uses SMDP Q-learning with γ^k discounting, where k is the number of
+    primitive steps the option took to complete.
+
+  Level 2 — Controller (standard Q-learning, one per subgoal):
+    Selects primitive actions (lift_cup, place_cup, palm_ball, etc.) to
+    achieve the current subgoal.
+    Receives intrinsic reward: +1.0 for achieving the subgoal, -0.01 per step.
+    Each option terminates when: subgoal achieved, timeout (15 steps), or
+    episode ends.
+
+Observation space:
+  PHYSICAL STATE ONLY — 10 features:
+    (mag_stuck, mag_visible, reg_under, reg_table, reg_hand,
+     cup_down, ball_visible, lime_cup, lime_visible, lime_count)
+
+  *** NO explicit beliefs (Δ) ***
+  *** NO implicit beliefs (□) ***
+  *** NO RM state ***
+  *** NO SAT-based reasoning ***
+
+  The agent CANNOT see what the Observer believes. It only sees where objects
+  physically are.
+
+Q-table structure:
+  meta_Q[physical_obs][subgoal_idx] → value
+  ctrl_Q[subgoal_idx][physical_obs][action] → value
+  (Separate Q-table per subgoal for the controller)
+
+Why it's a good baseline:
+  HRL tests what happens when you have temporal abstraction (options) but
+  NO epistemic reasoning. The subgoals capture the physical structure of the
+  trick (palm the ball, show the ball, etc.) but the agent has no way to
+  know whether the Observer is deceived — it can't see beliefs.
+
+Implementation: hrl_agent.py (292 lines)
+
+
+================================================================================
+3. BASELINE 2: HERL-QRM (Hierarchical Epistemic RL with Reward Machines)
+================================================================================
+
+What it is:
+  HERL-QRM combines ALL three components:
+    - Hierarchical options (from HRL)
+    - Epistemic observations (from BB-POMDP)
+    - Reward Machine structure (from QRM)
+
+  It uses the exact same two-level option hierarchy as HRL (same 5 subgoals,
+  same option termination conditions) but with the full epistemic observation
+  and RM state-indexed Q-tables.
+
+Architecture:
+  Level 1 — Meta-controller (SMDP Q-learning):
+    Same 5 subgoals as HRL.
+    But indexed by (epistemic_obs, rm_state) instead of just physical_obs.
+    So the meta-controller can see beliefs and RM phase when choosing which
+    subgoal to pursue next.
+
+  Level 2 — Controller (Q-learning per subgoal):
+    Same per-subgoal Q-tables as HRL.
+    But indexed by (epistemic_obs, rm_state) instead of just physical_obs.
+    So the controller can see beliefs when choosing primitive actions.
+
+Observation space:
+  FULL EPISTEMIC OBSERVATION + RM STATE:
+    ((physical_tuple, belief_tuple), rm_state_value)
+
+  This is the SAME observation as QRM, but the action selection uses the
+  two-level hierarchy instead of flat primitive actions.
+
+Q-table structure:
+  meta_Q[(epistemic_obs, rm_state)][subgoal_idx] → value
+  ctrl_Q[subgoal_idx][(epistemic_obs, rm_state)][action] → value
+
+Why it's a good baseline:
+  HERL-QRM tests what happens when you add temporal abstraction ON TOP of
+  epistemic reasoning + RM. It answers: "Does the option hierarchy help
+  when the agent already has full epistemic information?"
+
+Implementation: herl_qrm.py (234 lines)
+
+
+================================================================================
+4. COMPARISON SUMMARY
+================================================================================
+
++-------------------+-------------------+-------------------+------------------+
+|                   |  QRM (ours)       |  HRL              |  HERL-QRM        |
++-------------------+-------------------+-------------------+------------------+
+| Action space      | Flat (5 primitive)| Hierarchical      | Hierarchical     |
+|                   |                   | (5 options × 5    | (5 options × 5   |
+|                   |                   |  primitive)        |  primitive)       |
++-------------------+-------------------+-------------------+------------------+
+| Observation       | Epistemic + RM    | Physical only     | Epistemic + RM   |
+|                   | (18+ features)    | (10 features)     | (18+ features)   |
++-------------------+-------------------+-------------------+------------------+
+| Explicit beliefs  | Yes (Δφ)          | No                | Yes (Δφ)         |
+| Implicit beliefs  | Yes (□φ via SAT)  | No                | Yes (□φ via SAT) |
+| Reward Machine    | Yes               | No                | Yes              |
++-------------------+-------------------+-------------------+------------------+
+| Q-update rule     | Standard Q        | SMDP Q (γ^k)     | SMDP Q (γ^k)    |
+| Updates per step  | 1                 | 1 (controller)    | 1 (controller)   |
+|                   |                   | + 1 on option end | + 1 on option end|
++-------------------+-------------------+-------------------+------------------+
+| Subgoal structure | None (RM provides | Hand-crafted      | Hand-crafted     |
+|                   | phase structure)  | physical subgoals | physical subgoals|
++-------------------+-------------------+-------------------+------------------+
+
+
+================================================================================
+5. EXPERIMENTAL RESULTS (1000 episodes, 100 steps, 5 limes, 3 seeds)
+================================================================================
+
+  Method                    Success Rate    Mean Reward
+  -------------------------------------------------------
+  QRM (ours)                100.0%          46.7
+  HERL-QRM                  100.0%          40.0
+  HRL (options only)         33.3%           0.3
+
+
+================================================================================
+6. ANALYSIS: WHY DOES EACH METHOD PERFORM AS IT DOES?
+================================================================================
+
+QRM (100% success, 46.7 reward):
+  - The agent sees the full epistemic state, so it can observe when the
+    Observer has explicit belief Δ(reg_under)=True and when SAT derives
+    implicit belief □(reg_hand)=True. This allows it to learn the exact
+    sequence that creates false beliefs.
+  - The Reward Machine provides phase structure: the sparse reward (+1 for
+    ball deception, +10 for each lime reveal) is decomposed into transitions
+    (u0→u1→u2→u3→uT for the ball, uT→u4→uT for each lime). Q-values
+    backpropagate through the RM chain, assigning credit to early actions.
+  - Flat primitive actions give maximal control. The agent optimizes exactly
+    how many limes to fit in the 100-step budget (4-5 limes = 41-51 reward).
+  - No overhead from option selection — every step is a direct Q-learning
+    update on the action that matters.
+
+HRL (33% success, 0.3 reward):
+  - The agent CANNOT see beliefs. It doesn't know when Δ(reg_under)=True
+    or when □(reg_hand)=True. Since the Chop Cup trick is fundamentally
+    about manipulating what the Observer believes, a physical-only agent
+    cannot reliably learn the deception.
+  - The 33% success rate comes from random exploration: some subgoal
+    sequences accidentally produce the right physical conditions that
+    happen to trigger RM transitions, but the agent cannot learn to
+    reproduce this reliably because it can't observe the conditions.
+  - No RM structure means no phase decomposition — the agent receives
+    sparse reward only when the full trick succeeds, making credit
+    assignment very difficult.
+  - The options (palm, show_ball, reset, load_lime, show_lime) capture
+    physical structure but miss the EPISTEMIC structure entirely.
+
+HERL-QRM (100% success, 40.0 reward):
+  - With epistemic observations + RM, HERL-QRM can see beliefs and learn
+    the deception sequence, reaching 100% success like QRM.
+  - However, it achieves LOWER reward (40.0 vs 46.7) than QRM because:
+    (a) SMDP discounting: options take multiple steps, so the meta-controller
+        applies γ^k discounting where k is the option duration. This reduces
+        the effective reward signal for multi-step options compared to flat
+        Q-learning where each step gets γ^1 discounting.
+    (b) Subgoal overhead: the option framework adds an extra layer of
+        decision-making. The meta-controller must learn WHICH subgoal to
+        pick, and the controller must learn HOW to achieve it. This two-level
+        learning is harder to optimize than flat Q-learning on this task.
+    (c) Fixed subgoal timeout: each option has a 15-step timeout. If the
+        agent could act directly, it might fit more lime cycles in the
+        100-step budget.
+  - The Chop Cup has a SHORT action horizon (4-10 steps per phase), so
+    temporal abstraction provides limited benefit. Options are more valuable
+    in domains with LONG horizons (hundreds of steps) where primitive-action
+    exploration is intractable.
+
+
+================================================================================
+7. KEY INSIGHT: EPISTEMIC REASONING IS THE CRITICAL COMPONENT
+================================================================================
+
+The comparison cleanly demonstrates that:
+
+  1. Epistemic reasoning (beliefs + SAT) is ESSENTIAL for the Chop Cup.
+     Without it (HRL), the agent achieves only 33% success.
+
+  2. Reward Machine structure is IMPORTANT for efficient learning.
+     It decomposes the sparse reward into phases, enabling credit assignment.
+
+  3. Temporal abstraction (options) is NOT HELPFUL in this domain.
+     The task has short horizons, so flat actions are more efficient.
+     Adding options on top of epistemic+RM (HERL-QRM) slightly hurts
+     performance due to SMDP discounting overhead.
+
+The ordering is: QRM > HERL-QRM >> HRL
+
+This makes intuitive sense: the Chop Cup is a DECEPTION task. The agent
+must manipulate an Observer's BELIEFS. Without seeing those beliefs, the
+task is essentially random guessing. Seeing beliefs (epistemic reasoning)
+is what makes the problem solvable. The RM then provides efficient
+structure for learning. Options add unnecessary complexity for this
+particular domain.

@@ -1,0 +1,21 @@
+{
+  "input": "magic_cup/result/magic_cup_3.json",
+  "seed": 0,
+  "discount_factor": 0.95,
+  "num_episodes": 100000,
+  "max_episode_len": 1000,
+  "update_fn": "Expected",
+  "epsilon": 0.1,
+  "prefer_unseen": false,
+  "memory_capacity": null,
+  "memory_penalty_hard_limit": 1.0,
+  "memory_penalty_continuous": 0.0,
+  "evaluation_interval": 1,
+  "evaluation_num_episodes": 100,
+  "evaluation_max_episode_len": 100,
+  "output": "out",
+  "disable_actions": [],
+  "disable_shields": [],
+  "disable_rewards": [],
+  "disable_common_ground": false
+}

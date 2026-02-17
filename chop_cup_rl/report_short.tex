@@ -1,0 +1,749 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usetikzlibrary{automata, positioning, arrows.meta}
+
+% Notation
+\newcommand{\EBel}[1]{\ensuremath{\Delta #1}} % Explicit Belief
+\newcommand{\IBel}[1]{\ensuremath{\Box #1}}   % Implicit Belief
+\newcommand{\CG}{\ensuremath{\mathit{CG}}}    % Common Ground
+
+% Code listing style
+\lstset{
+    language=Python,
+    basicstyle=\small\ttfamily,
+    keywordstyle=\color{blue!70!black}\bfseries,
+    commentstyle=\color{green!50!black}\itshape,
+    stringstyle=\color{red!60!black},
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    frame=single,
+    framesep=3pt,
+    backgroundcolor=\color{gray!5},
+    tabsize=4,
+}
+
+\title{Epistemic Reinforcement Learning for the Chop Cup:\\
+\texorpdfstring{SAT-Based Belief Reasoning with Reward Machines}{SAT-Based Belief Reasoning with Reward Machines}}
+\author{}
+\date{February 2026}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+This paper presents a formal implementation of epistemic reinforcement learning for the Chop Cup, a canonical magic trick requiring systematic manipulation of an observer's belief state. We model the domain as a belief-base partially observable Markov decision process (BB-POMDP) where an agent (the Magician) must induce false beliefs in an observer through sequences of deceptive actions. Explicit beliefs ($\Delta$) are maintained as state fluents with update semantics derived from the formal action specification. Implicit beliefs ($\Box$) are computed via SAT-based entailment operating over the observer's knowledge base. We augment the MDP with a reward machine encoding the temporal structure of the deception protocol through condition-based transitions evaluated on the joint physical-epistemic state. Learning is performed using QRM (Q-Learning for Reward Machines, which decomposes the value function over reward machine states to enable efficient credit assignment under sparse rewards. 
+\end{abstract}
+
+% ===========================================================================
+\section{Introduction}
+% ===========================================================================
+
+Standard reinforcement learning optimizes for physical goals: reaching a target, maximizing score, or controlling a system. In contrast, \textbf{epistemic RL} optimizes for \emph{mental state manipulation}: the agent's goal is to change what another agent \emph{believes}, not merely what is physically true.
+
+The Chop Cup magic trick provides an ideal testbed for this paradigm. A magician must:
+\begin{enumerate}
+    \item Navigate two parallel realities: \textbf{Physical Reality} (where objects actually are) and the \textbf{Observer's Belief} (where the Observer thinks objects are).
+    \item Reach a state of \textbf{False Belief}: the Observer logically concludes $\phi$, but reality is $\neg\phi$.
+    \item Exploit \emph{logical deduction} rather than simple observation gaps. The Observer reasons from background knowledge and direct observations using propositional logic.
+\end{enumerate}
+
+This report describes the design, implementation, and evaluation of a complete Python system that realizes this paradigm. The system is built upon the BB-POMDP framework~\cite{engesser2025} and the \texttt{epirl} Rust codebase\footnote{\url{https://github.com/tengesser/epirl}}, re-implemented in Python for accessibility and extensibility. Every action effect faithfully mirrors the \texttt{magic\_cup.json} specification, verified by a comprehensive audit against the JSON formulas.
+
+% ===========================================================================
+\section{The Chop Cup Trick}
+% ===========================================================================
+
+We model the classic Chop Cup with \textbf{1 cup and 2 balls}:
+\begin{itemize}
+    \item \textbf{Magnetic Ball}: Permanently stuck inside the cup via a magnet. Hidden from the Observer.
+    \item \textbf{Regular Ball}: The visible ball that can be palmed, placed under the cup, or shown on the table.
+\end{itemize}
+
+The trick works because the Observer does not know about the magnetic ball. When the magician secretly palms the regular ball but the Observer sees it ``go under the cup,'' the Observer \emph{logically deduces} the ball must be under the cup. When the cup is lifted, the magnetic ball appears, creating the illusion that the ball magically reappeared.
+
+\textbf{Deception Condition (Success):}
+\[
+    \IBel{\phi} \;\land\; \neg\phi \qquad \text{(Observer concludes $\phi$, but reality is $\neg\phi$)}
+\]
+
+For the Chop Cup, success means:
+\[
+    \IBel{\text{reg\_under}} \;\land\; \text{reg\_hand}
+\]
+The Observer believes the regular ball is under the cup, but it is actually in the magician's hand.
+
+% ===========================================================================
+\section{Technical Framework}
+% ===========================================================================
+
+\subsection{State Representation}
+
+The environment state is a \textbf{factored set of boolean fluents}, partitioned into:
+
+\begin{itemize}
+    \item \textbf{Physical fluents}: The actual world state.
+    \begin{itemize}
+        \item \texttt{mag\_stuck}: Magnetic ball stuck in cup.
+        \item \texttt{mag\_visible}: Magnetic ball visible (cup lifted).
+        \item \texttt{reg\_under}, \texttt{reg\_table}, \texttt{reg\_hand}: Regular ball location.
+        \item \texttt{cup\_down}: Cup is covering its contents.
+    \end{itemize}
+    \item \textbf{Epistemic fluents} ($\Delta$): Observer's explicit beliefs.
+    \begin{itemize}
+        \item $\EBel{\text{reg\_under}}$, $\EBel{\neg\text{reg\_under}}$, $\EBel{\text{reg\_table}}$, $\EBel{\neg\text{reg\_table}}$, $\EBel{\text{reg\_hand}}$, $\EBel{\neg\text{reg\_hand}}$, $\EBel{\text{lime\_cup}}$, $\EBel{\neg\text{lime\_cup}}$
+    \end{itemize}
+\end{itemize}
+
+Implicit beliefs ($\IBel{\cdot}$) are \emph{not} stored as fluents. They are computed on-demand by the SAT solver.
+
+\subsection{Epistemic Logic Engine}
+
+The Observer's reasoning is modeled using three components:
+
+\subsubsection{Common Ground ($\CG$)}
+The Common Ground represents background knowledge that the Observer uses to reason about the world. Critically, the Observer believes there is only \emph{one} ball (they have no idea a hidden magnetic ball exists inside the cup). When the Observer deduces where the ball is, they apply a simple commonsense rule: the ball must be in \emph{exactly one} location. This is encoded as an \textbf{exclusive-or} constraint:
+\[
+    \CG: \quad \text{reg\_under} \oplus \text{reg\_table} \oplus \text{reg\_hand}
+    \qquad \text{(exactly one location)}
+\]
+From the Observer's perspective, this simply says ``the ball is either under the cup, on the table, or in the magician's hand, but not in multiple places at once.'' The fluent names use the prefix \texttt{reg\_} (for ``regular ball'') in our implementation, but the Observer does not make this distinction; to them, these describe where ``the ball'' is.
+
+Logically, the constraint means: the ball must be \emph{somewhere} (at least one location is true), but cannot be in \emph{multiple places} simultaneously (at most one location is true). In propositional logic, where $x_i, x_j \in \{\text{reg\_under}, \text{reg\_table}, \text{reg\_hand}\}$:
+\[
+    (\text{reg\_under} \lor \text{reg\_table} \lor \text{reg\_hand}) 
+    \;\land\; 
+    \bigwedge_{i < j} (\neg x_i \lor \neg x_j)
+\]
+The second part says ``for every pair of locations, they cannot both be true simultaneously.'' This gives us three clauses: $(\neg\text{reg\_under} \lor \neg\text{reg\_table})$, $(\neg\text{reg\_under} \lor \neg\text{reg\_hand})$, and $(\neg\text{reg\_table} \lor \neg\text{reg\_hand})$.
+
+This constraint is what enables the deception: when the Observer deduces that the ball is \emph{not} on the table and \emph{not} in the hand, the Common Ground forces them to conclude it must be under the cup. The Observer's reasoning is perfectly valid given their knowledge, but their conclusion is wrong because they are unaware of the magnetic ball. The false belief arises from missing information, not from a logical error.
+
+\subsubsection{Explicit Beliefs ($\EBel{\phi}$)}
+Direct observations stored as fluents. Actions generate belief updates through \textbf{belief transfer effects} (matching JSON notation $\triangle p := f$):
+\begin{itemize}
+    \item \texttt{palm\_ball}: $\EBel{\text{reg\_under}} \gets \EBel{\text{reg\_table}}$ \quad (the key transfer!)
+    \item \texttt{lift\_cup}: $\EBel{\neg\text{reg\_under}} \gets \top$, \; $\EBel{\text{reg\_table}} \gets \EBel{\text{reg\_table}} \lor \text{reg\_under}$
+    \item \texttt{place\_cup}: $\EBel{\text{reg\_under}} \gets \EBel{\text{reg\_table}}$
+    \item \texttt{reveal\_hand}: $\EBel{\text{reg\_hand}} \gets \text{reg\_hand}$
+\end{itemize}
+
+\subsubsection{Implicit Beliefs ($\IBel{\phi}$) via SAT Entailment}
+The SAT solver derives what the Observer \emph{must} believe:
+\[
+    \IBel{\phi} \quad \iff \quad \underbrace{\CG \;\land\; \bigwedge_i \EBel{\psi_i}}_{KB} \;\land\; \neg\phi \quad \text{is UNSAT}
+\]
+
+We implement a lightweight SAT solver sufficient for the small propositional theories in the Chop Cup domain.
+
+\begin{algorithm}[h]
+\caption{Implicit Belief Query via SAT Entailment}
+\begin{algorithmic}[1]
+\Function{ImplicitBelief}{$\phi$, $\text{positive}$, $\CG$, $\Delta$}
+    \State $KB \gets \CG.\text{clauses} \cup \Delta.\text{clauses}$
+    \If{positive}
+        \State $KB \gets KB \cup \{\{\neg\phi\}\}$ \Comment{Query: $KB \land \neg\phi$}
+    \Else
+        \State $KB \gets KB \cup \{\{\phi\}\}$ \Comment{Query: $KB \land \phi$}
+    \EndIf
+    \State \Return $\neg\text{SAT}(KB)$ \Comment{$\IBel{\phi}$ iff UNSAT}
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection*{Key Example: The Deception via Belief Transfer}
+The \texttt{palm\_ball} action is the core deceptive act. Its JSON effects include the critical \textbf{belief transfer}:
+\[
+    \triangle\text{reg\_under} := \triangle\text{reg\_table}
+\]
+Before the palm, $\EBel{\text{reg\_table}} = \top$ (observer sees ball on table). After the palm:
+\begin{align*}
+    \EBel{\text{reg\_under}} &= \top \quad \text{(transferred from } \EBel{\text{reg\_table}}\text{)} \\
+    \EBel{\neg\text{reg\_table}} &= \top \quad \text{(ball ``left'' the table)} \\
+    \EBel{\neg\text{reg\_hand}} &= \top \quad \text{(observer doesn't detect ball in hand)}
+\end{align*}
+The SAT solver then \textbf{confirms} the explicit belief: $\CG \land \EBel{\neg\text{table}} \land \EBel{\neg\text{hand}} \land \neg\text{reg\_under}$ is UNSAT, so $\IBel{\text{reg\_under}} = \top$. The Observer is now fully deceived: they believe the ball is under the cup, but it is actually in the magician's hand.
+
+% ===========================================================================
+\section{Reward Machine}
+% ===========================================================================
+
+A \textbf{Reward Machine} (RM)~\cite{icarte2018} is a finite automaton that tracks progress through the magic trick, providing structured rewards for achieving deception milestones. Our RM uses \textbf{condition-based transitions}: after each action modifies the environment state, the RM evaluates epistemic/propositional conditions on the resulting state to determine transitions.
+
+\subsection{RM States}
+
+The RM has 6 states in total (5 effective without the lime finale):
+
+\begin{center}
+\begin{tabular}{cll}
+\toprule
+\textbf{State} & \textbf{Name} & \textbf{Meaning} \\
+\midrule
+$u_0$ & Setup & Initial state. Ball on table, trick not started. \\
+$u_1$ & Covered & Observer saw ball ``go under'' cup ($\EBel{\text{reg\_under}}$). \\
+$u_2$ & Pocket & Observer infers ball in hand ($\IBel{\text{reg\_hand}}$). \\
+$u_3$ & Appear & Ball is visible under the cup (\texttt{ball\_visible}). \\
+$u_4$ & Lime Loaded & Lime loaded; observer believes no lime ($\IBel{\neg\text{lime\_cup}}$). \\
+$u_T$ & Lime Shown / Milestone & Lime revealed (\texttt{lime\_visible}); can loop back to load more limes. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+State $u_4$ is only active when \texttt{enable\_limes = True}. In the base ball-only trick, the effective RM has 5 states: $\{u_0, u_1, u_2, u_3, u_T\}$. There is no terminal RM state; episodes end only when the step limit is reached. From $u_T$, the agent can loop back to $u_4$ to load additional limes.
+
+\subsection{RM Automaton Diagram}
+
+\begin{center}
+\begin{tikzpicture}[->, >=stealth, node distance=2.5cm, every state/.style={thick, fill=gray!10}]
+% Standard Ball Cycle
+\node[state, initial] (u0) {$u_0$};
+\node[state, right of=u0] (u1) {$u_1$};
+\node[state, right of=u1] (u2) {$u_2$};
+\node[state, right of=u2] (u3) {$u_3$};
+
+% Lime Finale Branch
+\node[state, below of=u3] (u4) {$u_4$};
+\node[state, left of=u4] (uT) {$u_T$};
+
+% Ball Transitions
+\path
+    (u0) edge node[above] {\small $a$} (u1)
+    (u1) edge node[above] {\small $b$} (u2)
+    (u2) edge node[above] {\small $h$} (u3)
+    (u3) edge[bend right=50] node[below] {\small $c$} (u0)
+    (u3) edge node[left] {\small $g$ (+1.0)} (uT);
+
+% Lime Transitions
+\path
+    (u3) edge node[right] {\small $e$} (u4)
+    (u4) edge node[below] {\small $k$ (+10.0)} (uT)
+    (uT) edge[bend right=50] node[above] {\small $f$} (u4);
+\end{tikzpicture}
+\end{center}
+
+All transitions are solid; the lime finale ($u_4$--$u_T$) is fully active when \texttt{enable\_limes = True}. Note that $u_T$ is \emph{not} a terminal state: there is a loop from $u_T$ back to $u_4$ allowing the agent to load additional limes. Episodes end only when the step limit is reached.
+
+\subsection{Condition-Based Transitions}
+
+Each RM transition has a propositional or epistemic \textbf{condition} evaluated against the environment state \emph{after} the action's effects are applied. This contrasts with action-triggered RMs where transitions are encoded inside action effects.
+
+\begin{center}
+\begin{tabular}{clll}
+\toprule
+\textbf{Label} & \textbf{Transition} & \textbf{Condition} & \textbf{Description} \\
+\midrule
+$a$ & $u_0 \to u_1$ & $\EBel{\text{reg\_under}}$ & Observer sees ball ``under cup'' \\
+$b$ & $u_1 \to u_2$ & $\IBel{\text{reg\_hand}}$ & Observer infers ball in hand (SAT) \\
+$h$ & $u_2 \to u_3$ & \texttt{ball\_visible} & Ball appears under cup \\
+$c$ & $u_3 \to u_0$ & \texttt{cup\_down} & Reset for another cycle \\
+$g$ & $u_3 \to u_T$ & \texttt{ball\_visible} $\land$ $\neg$\texttt{lime\_visible} & \textbf{Deception success! (+1.0)} \\
+\midrule
+$e$ & $u_3 \to u_4$ & $\IBel{\neg\text{lime\_cup}}$ & Lime loaded secretly \\
+$k$ & $u_4 \to u_T$ & \texttt{lime\_visible} & \textbf{Lime reveal! (+10.0)} \\
+$f$ & $u_T \to u_4$ & $\IBel{\neg\text{lime\_cup}}$ & Loop back to load more limes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Note that transition $b$ uses an \textbf{implicit belief} ($\IBel{\text{reg\_hand}}$), computed by the SAT solver. This is the only RM transition that requires epistemic reasoning rather than simple fluent checks.
+
+\subsection{Reward Structure}
+
+\begin{itemize}
+    \item \textbf{Main reward}: $+1.0$ on transition $g$ ($u_3 \to u_T$) and $+10.0$ on transition $k$ ($u_4 \to u_T$). These represent successful deception milestones. The RM has no terminal state; episodes end only when the step limit (\texttt{max\_steps}) is reached.
+\end{itemize}
+
+\subsection{State Space and Action Space}
+
+\subsubsection{Action Space}
+The agent has 4 base actions (plus 1 extended action when limes are enabled):
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Action} & \textbf{Key Effect} & \textbf{Epistemic Effect} \\
+\midrule
+\texttt{lift\_cup} & Reveals contents & $\EBel{\neg\text{reg\_under}} \gets \top$ \\
+\texttt{place\_cup} & Covers contents & $\EBel{\text{reg\_under}} \gets \EBel{\text{reg\_table}}$ \\
+\texttt{palm\_ball} & Ball $\to$ hand & $\EBel{\text{reg\_under}} \gets \EBel{\text{reg\_table}}$ \\
+\texttt{reveal\_hand} & Show hand & $\EBel{\text{reg\_hand}} \gets \text{reg\_hand}$ \\
+\midrule
+\texttt{load\_lime} & Hide lime & (no belief change) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{State Space}
+
+The RL observation is a cross-product of environmental state and RM state:
+
+\begin{enumerate}
+    \item \textbf{Physical state} (10 features): \texttt{mag\_stuck}, \texttt{mag\_visible}, \texttt{reg\_under}, \texttt{reg\_table}, \texttt{reg\_hand}, \texttt{cup\_down}, \texttt{ball\_visible}, \texttt{lime\_cup}, \texttt{lime\_visible}, \texttt{lime\_count}.
+    \item \textbf{Belief state} (8 features): $\EBel{\text{reg\_under}}$, $\EBel{\neg\text{reg\_under}}$, $\EBel{\text{reg\_table}}$, $\EBel{\neg\text{reg\_table}}$, $\EBel{\text{reg\_hand}}$, $\EBel{\neg\text{reg\_hand}}$, $\EBel{\text{lime\_cup}}$, $\EBel{\neg\text{lime\_cup}}$.
+    \item \textbf{RM state}: One of $\{u_0, u_1, u_2, u_3, u_4, u_T\}$ (6 states).
+\end{enumerate}
+
+% The total \emph{theoretical} state space is $2^{18} \times 7 \approx 1{,}835{,}008$ combinations, but the \emph{reachable} state space is far smaller. In practice, only \textbf{$\sim$28 unique environment states} are explored during training, because many fluent combinations are unreachable from the initial state.
+
+% The QRM agent uses a single Q-table indexed by the cross-product observation $(s_{\text{env}}, u)$, where $s_{\text{env}}$ is the 18-feature environment observation (physical + belief) and $u$ is the RM state index. This gives $\sim$28 $\times$ 7 = 196 potential Q-table entries, of which $\sim$178 are actually observed during training.
+
+% % ===========================================================================
+% \section{Implementation}
+% % ===========================================================================
+
+% \subsection{Architecture}
+
+% The implementation is organized into five Python modules that mirror the Rust \texttt{epirl} codebase:
+
+% \begin{center}
+% \begin{tabular}{lll}
+% \toprule
+% \textbf{Module} & \textbf{Rust Counterpart} & \textbf{Role} \\
+% \midrule
+% \texttt{epistemic\_logic.py} & \texttt{bbases} crate & SAT solver, Common Ground, states \\
+% \texttt{reward\_machine.py} & RM in JSON effects & 7-state RM, condition-based transitions \\
+% \texttt{chop\_cup\_env.py} & \texttt{bbmdp.rs} & Environment, actions, belief updates \\
+% \texttt{qrm.py} & \texttt{smdp} crate & QRM: online Q-learning per RM state \\
+% \texttt{main.py} & \texttt{rlbb.rs} & Training loop, evaluation, output \\
+% \bottomrule
+% \end{tabular}
+% \end{center}
+
+% \subsection{Action Space and JSON-Faithful Effects}
+
+% Each action's effects are a direct translation of the JSON formulas. For the critical \texttt{palm\_ball}:
+
+% \begin{center}
+% \begin{tabular}{ll}
+% \toprule
+% \textbf{JSON Effect} & \textbf{Python Code} \\
+% \midrule
+% \texttt{reg\_hand := reg\_table} & \texttt{if old\_reg\_table: add(REG\_HAND)} \\
+% \texttt{reg\_table := $\bot$} & \texttt{(not added)} \\
+% $\triangle$\texttt{reg\_under := }$\triangle$\texttt{reg\_table} & \texttt{if old\_eb\_reg\_table: add(EB\_REG\_UNDER)} \\
+% $\triangle$\texttt{!reg\_table := T} & \texttt{add(EB\_NOT\_REG\_TABLE)} \\
+% $\triangle$\texttt{!reg\_hand := T} & \texttt{add(EB\_NOT\_REG\_HAND)} \\
+% \bottomrule
+% \end{tabular}
+% \end{center}
+
+% The \textbf{belief transfer} $\triangle\text{reg\_under} := \triangle\text{reg\_table}$ is the most critical effect. It was missing in an earlier version, causing the RM to never transition. The fix was identified by a systematic audit (\texttt{audit.py}) that checks every fluent against the JSON specification.
+
+% \subsection{SAT Solver}
+
+% We implement a lightweight SAT solver sufficient for the small propositional theories in the Chop Cup domain ($\leq 3$ Observer variables, $\leq 8$ clauses). The Rust counterpart uses the Kissat industrial SAT solver; our solver provides the same functionality at smaller scale.
+
+% \subsection{QRM: Q-Learning for Reward Machines}
+
+% We implement the QRM algorithm from Icarte et al.~\cite{icarte2018}, following the reference implementation at \url{https://github.com/RodrigoToroIcarte/reward_machines}.
+
+% The key ideas:
+% \begin{enumerate}
+%     \item \textbf{Single Q-table} over the cross-product space $(s_{\text{env}}, u)$, where $s_{\text{env}}$ is the environment observation (physical + belief features) and $u$ is the RM state index.
+%     \item \textbf{Online incremental updates} with learning rate $\alpha$ (not batch full-sweep).
+%     \item \textbf{RM-aware Q-update}: each real transition updates the Q-value for the current RM state only.
+% \end{enumerate}
+
+% \begin{algorithm}[h]
+% \caption{QRM — Online Q-Learning for Reward Machines}
+% \begin{algorithmic}[1]
+% \State Initialize $Q(s, u, a) \gets q_{\mathrm{init}}$ for all $(s, u, a)$
+% \For{each training episode}
+%     \State Reset environment; $s \gets s_0$, $u \gets u_0$
+%     \While{not terminal and step $< T_{\max}$}
+%         \State Select $a$ via $\varepsilon$-greedy on $Q(s, u, \cdot)$
+%         \State Execute $a$; observe $s'$, new RM state $u'$, reward $r$
+%         \State \textbf{QRM update (current RM state):}
+%         \If{$u' = u_T$} \Comment{Terminal}
+%             \State $\delta_Q \gets r - Q(s, u, a)$
+%         \Else
+%             \State $\delta_Q \gets r + \gamma \cdot \max_{a'} Q(s', u', a') - Q(s, u, a)$
+%         \EndIf
+%         \State $Q(s, u, a) \gets Q(s, u, a) + \alpha \cdot \delta_Q$
+%         \State $s \gets s'$; $u \gets u'$
+%     \EndWhile
+% \EndFor
+% \end{algorithmic}
+% \end{algorithm}
+
+% The RM decomposes the learning problem: the agent maintains a Q-table indexed by $(s_{\text{env}}, u)$, where the RM state $u$ tracks progress through the trick. Each real transition updates only $Q(s, u, a)$ for the current RM state. The RM provides structure by breaking the sparse reward problem into phases, enabling efficient credit assignment even though the final reward $+1$ is only received at state $u_T$.
+
+% \textbf{Key differences from batch model-based Q-learning:}
+% \begin{itemize}
+%     \item \textbf{Online incremental updates}: Q-values change by $\alpha \cdot \delta_Q$ per step, not via full-sweep value iteration. This creates a gradual learning curve.
+%     \item \textbf{Standard $\varepsilon$-greedy}: No prefer-unseen heuristic. Exploration is purely random with probability $\varepsilon$.
+%     \item \textbf{Learning rate $\alpha$}: Controls the speed of Q-value convergence. Smaller $\alpha$ means slower but smoother convergence.
+% \end{itemize}
+
+% \subsection{Comparison with Rust \texttt{epirl} Implementation}
+
+% The original \texttt{epirl} framework uses:
+% \begin{itemize}
+%     \item A Rust binary (\texttt{rlbb}) that reads a JSON specification defining actions, common ground, initial states, rewards, and terminal conditions.
+%     \item The \texttt{bbases} crate for belief base operations and SAT solving (via Kissat/CaDiCaL).
+%     \item The \texttt{smdp} crate for the generic SMDP learning algorithm and batch Q-learning.
+% \end{itemize}
+
+% Our Python implementation preserves the key architectural decisions:
+% \begin{enumerate}
+%     \item \textbf{State = frozenset of fluents} (atoms + explicit beliefs).
+%     \item \textbf{Implicit beliefs computed on-demand} via SAT entailment.
+%     \item \textbf{Action effects faithfully mirror the JSON specification}: each fluent's new value is computed from the JSON formula applied to the old state.
+% \end{enumerate}
+
+% Beyond matching the Rust implementation, we replace the batch Q-learning with QRM (online Q-learning for Reward Machines), following the reference implementation from Icarte et al.~\cite{icarte2018}. The key algorithmic difference is the use of online incremental updates (learning rate $\alpha$) rather than batch full-sweep value iteration, combined with RM-structured Q-tables that decompose the sparse reward problem into phases.
+
+% ===========================================================================
+\section{Results}
+% ===========================================================================
+
+\subsection{Training Configuration}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Algorithm & QRM (Icarte et al., 2018) \\
+Training episodes & 500 \\
+Evaluation episodes & 100 (per evaluation) \\
+% Evaluation interval & every episode \\
+Discount factor ($\gamma$) & 0.9 \\
+Learning rate ($\alpha$) & 0.1 \\
+Exploration rate ($\varepsilon$) & 0.1 (standard $\varepsilon$-greedy) \\
+Q-value initialization ($q_{\mathrm{init}}$) & 0.0 \\
+Max steps per episode & 50 \\
+% Lime mode & enabled (all 7 RM states) \\
+Random seed & 42 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Learning Curve}
+
+The QRM agent converges from a 43\% random baseline to \textbf{100\% deception success within $\sim$7 training episodes}. The gradual convergence demonstrates the effect of online incremental Q-updates (learning rate $\alpha = 0.1$) compared to batch full-sweep methods that converge instantly.
+
+% \begin{center}
+% \begin{tabular}{ccc}
+% \toprule
+% \textbf{Episode} & \textbf{Success Rate} & \textbf{Disc.\ Reward} \\
+% \midrule
+% 0 (untrained) & 43\% & 0.196 \\
+% 1 & 47\% & 0.264 \\
+% 2 & 47\% & 0.265 \\
+% 3 & 48\% & 0.301 \\
+% 4 & 49\% & 0.309 \\
+% 5 & 62\% & 0.400 \\
+% 6 & 62\% & 0.400 \\
+% 7+ & 100\% & 0.729 \\
+% \bottomrule
+% \end{tabular}
+% \end{center}
+
+% The optimal 4-step ball-only sequence yields a discounted reward of $\gamma^3 = 0.9^3 = 0.729$, confirming the agent receives reward $+1.0$ at step~4 (discount applied three times from step~1). The 43\% starting point reflects the probability that a random policy stumbles upon the correct 4-step sequence within the 50-step budget.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{results_new_rm/reward_curve.pdf}
+\caption{QRM reward curve with the updated 6-state RM ($r_{\text{ball}} = +1$, $r_{\text{lime}} = +10$, no terminal state).}
+\label{fig:reward_new_rm}
+\end{figure}
+
+The reward curve in Figure~\ref{fig:reward_new_rm} exhibits two distinctive features:
+
+\begin{enumerate}
+    \item \textbf{Rapid initial jump (episodes 0--7):} The agent quickly discovers the ball deception sequence ($u_0 \to u_1 \to u_2 \to u_3$) and begins collecting the $+1.0$ ball milestone reward ($g$: $u_3 \to u_T$). It then learns to enter the lime phase ($e$: $u_3 \to u_4$) and collect lime reveal rewards ($k$: $u_4 \to u_T$, $+10.0$ each). By episode~7 the agent achieves 100\% success rate.
+
+    \item \textbf{Steady plateau at $\sim$21.0, then increase to $\sim$31.0:} Since there is no terminal RM state, every episode runs for the full \texttt{max\_steps}~$= 50$ steps. The agent repeatedly cycles through the lime loop ($u_T \xrightarrow{f} u_4 \xrightarrow{k} u_T$), collecting $+10.0$ per lime reveal. The plateau at 21.0 corresponds to $1.0$ (ball) $+ 2 \times 10.0$ (two limes) $= 21.0$. As the agent's Q-values continue to sharpen, it learns to fit a third lime cycle within the 50-step budget, reaching $1.0 + 3 \times 10.0 = 31.0$. The number of lime cycles is ultimately bounded by \texttt{max\_limes}~$= 3$ and the step budget.
+\end{enumerate}
+
+\subsubsection{Extended Run: 5 Limes, 100 Steps}
+
+To demonstrate the scalability of the lime loop, we increased the step budget to 100 and allowed up to 5 limes (1000 training episodes). Figure~\ref{fig:reward_5limes} shows the resulting reward curve.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{results/reward_curve.pdf}
+\caption{QRM reward curve with extended budget (\texttt{max\_steps}~$=100$, \texttt{max\_limes}~$=5$, 1000 episodes).}
+\label{fig:reward_5limes}
+\end{figure}
+
+The extended run reveals a characteristic \textbf{staircase pattern} as the agent discovers how to fit progressively more lime cycles:
+
+\begin{center}
+\begin{tabular}{cccl}
+\toprule
+\textbf{Episode} & \textbf{Mean Reward} & \textbf{Limes Fitted} & \textbf{Breakdown} \\
+\midrule
+0 (random) & 15.3 & $\sim$1--2 & Random exploration \\
+7 & 31.0 & 3 & $1 + 3 \times 10 = 31$ \\
+447 & 41.0 & 4 & $1 + 4 \times 10 = 41$ \\
+1000 (final) & 40.0 & 4 & Stable at 4 limes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Each plateau corresponds to the agent learning to squeeze one additional lime cycle into the 100-step budget. The jump from 31 to 41 at episode~447 shows that Q-value propagation through the lime loop takes hundreds of episodes at $\alpha = 0.1$, since the benefit of a 4th lime must backpropagate through multiple RM transitions before the agent prefers the longer sequence. The theoretical maximum with 5 limes is $1 + 5 \times 10 = 51$, but the agent stabilises at 4 limes ($= 41$) within 1000 episodes, suggesting that fitting a 5th lime requires further Q-value refinement or more training.
+
+% ===========================================================================
+\subsection{Baseline Comparison}
+% ===========================================================================
+
+We compare QRM against two baselines to evaluate the contribution of epistemic reasoning and reward machine structure:
+
+\begin{enumerate}
+    \item \textbf{HRL} (Hierarchical RL with Options)~\cite{sutton1999}: Two-level hierarchy where a meta-controller selects among 5 subgoals (\emph{palm}, \emph{show\_ball}, \emph{reset}, \emph{load\_lime}, \emph{show\_lime}) and a controller executes primitive actions to achieve each subgoal. Uses SMDP Q-learning with $\gamma^k$ discounting. The agent observes \emph{physical state only} (10 features) --- no beliefs, no RM state.
+
+    \item \textbf{HERL-QRM} (Hierarchical Epistemic RL with Reward Machines): The same two-level option hierarchy as HRL, but with the \emph{full epistemic observation} (physical + explicit/implicit beliefs + RM state). This ablation tests whether temporal abstraction adds value when combined with epistemic reasoning.
+\end{enumerate}
+
+All three methods were trained for 1000 episodes (\texttt{max\_steps}$=100$, \texttt{max\_limes}$=5$, $\gamma = 0.9$, $\alpha = 0.1$, $\varepsilon = 0.1$) and averaged over 3 random seeds.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.95\textwidth]{results_comparison/comparison_success.pdf}
+\caption{Success rate comparison: QRM vs HRL vs HERL-QRM (3-seed average, shaded $\pm 1$ std).}
+\label{fig:comparison_success}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.95\textwidth]{results_comparison/comparison_reward.pdf}
+\caption{Reward comparison: QRM vs HRL vs HERL-QRM (3-seed average, shaded $\pm 1$ std).}
+\label{fig:comparison_reward}
+\end{figure}
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Success Rate} & \textbf{Mean Reward} & \textbf{Observation Space} \\
+\midrule
+\textbf{QRM (ours)} & \textbf{100\%} & \textbf{46.7} & Epistemic + RM (18+ feat.) \\
+HERL-QRM & 100\% & 40.0 & Epistemic + RM + Options \\
+HRL & 33\% & 0.3 & Physical only (10 feat.) \\
+\bottomrule
+\end{tabular}
+\caption{Final performance after 1000 training episodes (3-seed average).}
+\label{tab:comparison}
+\end{table}
+
+\textbf{Key findings:}
+\begin{itemize}
+    \item \textbf{Epistemic reasoning is essential.} HRL with physical-only observation achieves only 33\% success, demonstrating that the trick cannot be reliably learned without access to belief fluents. The agent cannot observe \emph{what the Observer believes}, so it cannot learn to manipulate those beliefs.
+
+    \item \textbf{QRM outperforms the hierarchical variants.} Although both QRM and HERL-QRM reach 100\% success, QRM achieves higher reward (46.7 vs 40.0) because flat primitive actions allow finer-grained optimization of the lime loop timing. The SMDP discounting in hierarchical methods ($\gamma^k$ for $k$-step options) reduces the effective credit signal for multi-step options.
+
+    \item \textbf{Temporal abstraction adds limited value in this domain.} The Chop Cup trick has a short action horizon (4--10 steps per phase), so the overhead of option selection does not pay off. Hierarchical methods are better suited for domains with much longer horizons where primitive-action RL struggles with exploration.
+\end{itemize}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+% \subsection{Learned Policy Analysis}
+
+% The QRM agent discovers the \textbf{ball-only path} (4 steps, discounted reward $\gamma^3 = 0.729$) rather than the lime path (7+ steps, $\gamma^6 \approx 0.531$). The agent correctly learns that the shorter path yields higher discounted reward:
+
+% \begin{enumerate}
+%     \item \texttt{palm\_ball}: Ball secretly moved from table to hand. RM: $u_0 \to u_1$.\\
+%     \emph{Condition satisfied:} $\EBel{\textrm{reg\_under}} = \top$ (Observer believes ball went under cup).
+%     \item \texttt{lift\_cup}: Cup lifted, magnetic ball visible. RM: $u_1 \to u_2$.\\
+%     \emph{Condition satisfied:} $\IBel{\textrm{reg\_hand}} = \top$ (SAT derives implicit belief from contradictory KB).
+%     \item \texttt{reveal\_hand}: Ball revealed in hand. RM: $u_2 \to u_3$.\\
+%     \emph{Condition satisfied:} $\textrm{ball\_visible} = \top$ (ball is now visible).
+%     \item \texttt{reveal\_hand}: Trick completed. RM: $u_3 \to u_T$. Reward $+1.0$.\\
+%     \emph{Condition satisfied:} $\textrm{ball\_visible} \land \neg \textrm{lime\_visible}$.
+% \end{enumerate}
+
+% \textbf{Selected Q-values at convergence (cross-product Q-table):}
+% \begin{center}
+% \begin{tabular}{clc}
+% \toprule
+% \textbf{RM State} & \textbf{Best Action} & \textbf{Q-Value} \\
+% \midrule
+% $u_0$ (Setup) & \texttt{palm\_ball} & 0.729 \\
+% $u_1$ (Covered) & \texttt{lift\_cup} & 0.810 \\
+% $u_2$ (Pocket) & \texttt{reveal\_hand} & 0.900 \\
+% $u_3$ (Appear) & \texttt{reveal\_hand} & 1.000 \\
+% $u_4$ (Lime Loaded) & \texttt{lift\_cup} & 0.595 \\
+% $u_T$ (Lime Shown / Milestone) & \texttt{reveal\_hand} & 0.902 \\
+% \bottomrule
+% \end{tabular}
+% \end{center}
+
+% The Q-values follow the expected discount chain for the ball-only path: $Q_{u_3} = 1.0$, $Q_{u_2} = \gamma \cdot 1.0 = 0.9$, $Q_{u_1} = \gamma^2 = 0.81$, $Q_{u_0} = \gamma^3 = 0.729$.
+
+% \subsection{State Space Statistics}
+
+% \begin{center}
+% \begin{tabular}{lc}
+% \toprule
+% \textbf{Metric} & \textbf{Value} \\
+% \midrule
+% Unique env states (reachable) & $\sim$28 \\
+% Q-table entries (product space) & 178 \\
+% Observed transitions & 2,441 \\
+% QRM updates per transition & 1 (current RM state) \\
+% Optimal episode length & 4 steps (ball-only) \\
+% Lime path length & 7+ steps \\
+% \bottomrule
+% \end{tabular}
+% \end{center}
+
+% The QRM agent updates Q-values for the current RM state on each real transition, with the RM structure providing natural phase decomposition. The agent explores the lime sub-routine during $\varepsilon$-greedy episodes but converges on the shorter ball-only path because it maximizes discounted reward.
+
+% \subsection{Comparison with Rust \texttt{epirl} Experiments}
+
+% We compared our results with the Rust experiments using the \emph{same} \texttt{magic\_cup.json}:
+
+% \begin{center}
+% \begin{tabular}{lccccc}
+% \toprule
+% \textbf{Experiment} & \textbf{$\varepsilon$} & \textbf{Algorithm} & \textbf{Final Success} & \textbf{Episodes} \\
+% \midrule
+% Rust out\_1 (seed=1) & 0.5 & Batch Q & 0\% & 100 \\
+% Rust out\_2 (seed=2) & 0.5 & Batch Q & 0\% & 100 \\
+% Rust out\_3 (seed=3) & 0.5 & Batch Q & 29\% & 100 \\
+% Rust out\_4 (seed=4) & 0.5 & Batch Q & 0\% & 100 \\
+% Rust out\_5 (seed=5) & 0.5 & Batch Q & 0\% & 100 \\
+% \midrule
+% Python (seed=42) & 0.1 & QRM & \textbf{100\%} & 500 \\
+% \bottomrule
+% \end{tabular}
+% \end{center}
+
+% The Rust experiments with $\varepsilon = 0.5$ and batch Q-learning consistently \emph{fail} to converge on the same JSON specification. Our QRM implementation with $\varepsilon = 0.1$ and online Q-learning ($\alpha = 0.1$) successfully learns the trick. The RM structure is key: it decomposes the sparse reward problem into phases, enabling efficient credit assignment through Q-value backpropagation even though the final reward $+1$ is only received at state $u_T$.
+
+% % ===========================================================================
+% \section{Discussion}
+% % ===========================================================================
+
+% \subsection{JSON Fidelity and Verification}
+
+% The implementation was verified against \texttt{magic\_cup.json} using a systematic audit (\texttt{audit.py}) that:
+% \begin{enumerate}
+%     \item Steps through multiple action sequences (optimal path, alternative path, extended path).
+%     \item After each action, compares every fluent against the JSON specification formulas.
+%     \item Verifies RM transition correctness, reward values, and terminal conditions.
+% \end{enumerate}
+% All three audit sequences pass with zero errors, confirming faithful implementation.
+
+% \subsection{Belief Contradiction After Lift}
+
+% An important observation: after the sequence \texttt{palm\_ball} $\to$ \texttt{lift\_cup}, the Observer's explicit belief base becomes contradictory. The Observer has $\EBel{\neg\text{reg\_under}}, \EBel{\neg\text{reg\_table}}, \EBel{\neg\text{reg\_hand}}$, that is, all negative beliefs, contradicting the Common Ground's exactly-one constraint. From this contradictory KB, the SAT solver derives that \emph{everything} is believed ($\IBel{\phi} = \top$ for all $\phi$).
+
+% This is \textbf{correct behavior} that matches the JSON specification. In the narrative of the trick, the Observer is genuinely confused at this point: they saw the ball ``go under'' but nothing was there. The RM doesn't care about belief consistency; it tracks the \emph{structure} of the trick sequence. The reward comes from completing the full routine, not from maintaining a consistent epistemic state.
+
+% \subsection{True Epistemic Reasoning vs.\ State Flags}
+
+% A na\"ive implementation could encode $\IBel{\text{reg\_under}}$ as a direct state flag set by the \texttt{palm\_ball} action. Our implementation instead relies on the SAT solver to \emph{derive} implicit beliefs from explicit observations and common ground. This distinction is critical:
+
+% \begin{itemize}
+%     \item \textbf{Compositionality}: New actions automatically trigger correct belief updates.
+%     \item \textbf{Logical soundness}: The Observer's deductions follow from first principles.
+%     \item \textbf{Scalability}: Complex epistemic scenarios require only changes to the common ground, not handcrafted flags.
+% \end{itemize}
+
+% \subsection{Convergence Analysis}
+
+% The QRM agent converges from 43\% (random) to 100\% success in $\sim$7 episodes. The convergence speed is explained by:
+% \begin{enumerate}
+%     \item \textbf{RM-structured Q-tables}: The Reward Machine decomposes the sparse reward problem into phases. Q-values backpropagate through the RM chain ($u_T \to u_3 \to u_2 \to u_1 \to u_0$), assigning credit to early actions.
+%     \item \textbf{Compact reachable state space}: Only $\sim$28 environment states are reachable (out of $2^{18}$ theoretical), because boolean factoring constrains fluent combinations.
+%     \item \textbf{Short optimal path}: The ball-only trick requires exactly 4 actions, and with a 50-step budget, even random exploration discovers it $\sim$43\% of the time.
+%     \item \textbf{Online learning rate $\alpha = 0.1$}: Unlike batch full-sweep methods that converge in 1--2 episodes, the incremental learning rate creates a visible learning curve, with Q-values gradually approaching their true values.
+% \end{enumerate}
+
+% The 43\% starting success rate (episode~0) reflects that a random policy with 50-step budget has a significant probability of stumbling upon the correct 4-step sequence. With fewer steps (e.g., $T_{\max} = 10$), the baseline would be lower and convergence would appear steeper.
+
+% \subsection{Reward Machine Benefits}
+
+% The condition-based Reward Machine provides several advantages:
+% \begin{itemize}
+%     \item \textbf{Temporal decomposition}: Multi-step deception strategies are broken into verifiable phases.
+%     \item \textbf{Markov property preserved}: The RM state becomes part of the RL observation (Batch Q) or indexes separate Q-tables (QRM), making training efficient.
+%     \item \textbf{Interpretability}: Each RM transition corresponds to a meaningful event in the magic routine (e.g., $u_1 \to u_2$: ``Observer implicitly believes ball is in hand'').
+%     \item \textbf{Modularity}: The lime sub-routine ($u_4$--$u_T$) is fully active, giving the agent the choice between the short ball-only path and the extended lime routine.
+%     \item \textbf{QRM compatibility}: Condition-based transitions enable RM-structured Q-tables that decompose the sparse reward problem into learnable phases.
+% \end{itemize}
+
+% % ===========================================================================
+% \section{Conclusion}
+% % ===========================================================================
+
+% We presented a self-contained Python implementation of epistemic reinforcement learning for the Chop Cup magic trick, with action effects faithfully mirroring the \texttt{magic\_cup.json} specification. The system demonstrates that:
+% \begin{enumerate}
+%     \item \textbf{SAT-based implicit belief reasoning} can be effectively integrated into an RL loop, enabling agents to reason about and manipulate other agents' knowledge states.
+%     \item \textbf{Belief transfer effects} ($\triangle p := \triangle q$) are the critical mechanism enabling deception, transferring the Observer's existing beliefs to new contexts without direct observation.
+%     \item \textbf{Condition-based Reward Machines} with all 6 states active (including the lime sub-routine $u_4$--$u_T$) faithfully encode the temporal structure of the trick, with condition-based transitions evaluated against the epistemic state.
+%     \item \textbf{QRM} (Icarte et al., 2018) exploits the RM structure by maintaining Q-tables indexed by $(s_{\text{env}}, u)$. The online Q-learning with learning rate $\alpha = 0.1$ creates a visible learning curve from 43\% to 100\%.
+%     \item The agent learns the optimal 4-step ball-only policy (\texttt{palm\_ball} $\to$ \texttt{lift\_cup} $\to$ \texttt{reveal\_hand} $\to$ \texttt{reveal\_hand}) over the longer lime path (7+ steps), correctly maximizing discounted reward at $\gamma^3 = 0.729$.
+% \end{enumerate}
+
+% \subsection*{Code Availability}
+% The complete implementation is available in the \texttt{chop\_cup\_rl/} directory. To reproduce:
+% \begin{lstlisting}[language=bash, numbers=none]
+% cd chop_cup_rl
+% python test_epistemic.py   # verify correctness (7 tests, 44 checks)
+% python main.py --episodes 500 --seed 42   # QRM training
+% \end{lstlisting}
+
+% ===========================================================================
+% References
+% ===========================================================================
+\begin{thebibliography}{9}
+
+\bibitem{engesser2025}
+T.~Engesser, R.~Mattm\"{u}ller, and B.~Nebel.
+\newblock Epistemic Reinforcement Learning with Belief Bases.
+\newblock In {\em Proceedings of AAMAS 2025}, 2025.
+
+\bibitem{icarte2018}
+R.~T.~Icarte, T.~Q.~Klassen, R.~Valenzano, and S.~A.~McIlraith.
+\newblock Using Reward Machines for High-Level Task Specification and Decomposition in Reinforcement Learning.
+\newblock In {\em Proceedings of ICML 2018}, pages 2107--2116, 2018.
+
+\bibitem{bolander2011}
+T.~Bolander and M.~B.~Andersen.
+\newblock Epistemic Planning for Single and Multi-Agent Systems.
+\newblock {\em Journal of Applied Non-Classical Logics}, 21(1):9--34, 2011.
+
+\bibitem{rabinowitz2018}
+N.~C.~Rabinowitz, F.~Perbet, H.~F.~Song, C.~Zhang, S.~M.~A.~Eslami, and M.~Botvinick.
+\newblock Machine Theory of Mind.
+\newblock In {\em Proceedings of ICML 2018}, pages 4218--4227, 2018.
+
+\bibitem{sutton1999}
+R.~S.~Sutton, D.~Precup, and S.~Singh.
+\newblock Between MDPs and Semi-MDPs: A Framework for Temporal Abstraction in Reinforcement Learning.
+\newblock {\em Artificial Intelligence}, 112(1--2):181--211, 1999.
+
+\end{thebibliography}
+
+\end{document}

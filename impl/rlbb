@@ -1,0 +1,4 @@
+#!/bin/bash
+ulimit -s 67108864
+cargo build --release &> /dev/null
+./target/release/rlbb $@

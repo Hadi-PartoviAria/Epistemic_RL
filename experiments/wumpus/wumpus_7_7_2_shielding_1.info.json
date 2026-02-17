@@ -1,0 +1,28 @@
+{
+  "input": "../wumpus/wumpus_7_7_2.json",
+  "seed": 1,
+  "discount_factor": 0.95,
+  "num_episodes": 50000,
+  "max_episode_len": 100,
+  "update_fn": "Expected",
+  "epsilon": 0.1,
+  "prefer_unseen": false,
+  "memory_capacity": null,
+  "memory_penalty_hard_limit": 1.0,
+  "memory_penalty_continuous": 0.0,
+  "evaluation_interval": 200,
+  "evaluation_num_episodes": 100,
+  "evaluation_max_episode_len": 49,
+  "output": "/home/thorsten/epirl/experiments/wumpus_lengthy/wumpus_7_7_2_shielding_1",
+  "disable_actions": [
+    "forget_smells",
+    "infer_wumpus_position"
+  ],
+  "disable_shields": [],
+  "disable_rewards": [
+    "infer_wumpus_position",
+    "new_pos_smell",
+    "new_neg_smell"
+  ],
+  "disable_common_ground": false
+}

@@ -1,5 +1,5 @@
 """
-3-Way Comparison Runner — QRM vs HRL vs HERL-QRM on the Chop Cup Magic Trick.
+3-Way Comparison Runner — QRM vs HRL vs HRL-RM on the Chop Cup Magic Trick.
 
 Trains all three agents on the same environment, evaluates periodically,
 and generates side-by-side comparison plots.
@@ -7,7 +7,7 @@ and generates side-by-side comparison plots.
 Methods compared:
   1. QRM      — Q-Learning for Reward Machines (epistemic obs + RM, flat actions)
   2. HRL      — Hierarchical RL with options (physical obs only, no RM)
-  3. HERL-QRM — Hierarchical RL + epistemic obs + RM (best of both)
+  3. HRL-RM   — Hierarchical RL + epistemic obs + RM (best of both)
 
 Usage:
     python run_comparison.py --episodes 1000 --max-steps 100 --max-limes 5 --seed 42
@@ -479,9 +479,9 @@ def plot_comparison(
         "herl": "#4CAF50",   # green
     }
     labels = {
-        "qrm":  "QRM (ours)",
-        "hrl":  "HRL (options only)",
-        "herl": "HERL-QRM (options + epistemic + RM)",
+        "qrm":  "QRM",
+        "hrl":  "HRL",
+        "herl": "HRL-RM",
     }
 
     def _plot_metric(ax, metric_idx, ylabel, title, ylim=None):
@@ -547,15 +547,15 @@ def plot_comparison(
     gap_hrl  = np.array(q_rw[:min_len]) - np.array(r_rw[:min_len])
     gap_herl = np.array(q_rw[:min_len]) - np.array(h_rw[:min_len])
     ax.plot(ep_c, gap_hrl,  color=colors["hrl"],  linewidth=2, label="QRM − HRL")
-    ax.plot(ep_c, gap_herl, color=colors["herl"], linewidth=2, label="QRM − HERL-QRM")
+    ax.plot(ep_c, gap_herl, color=colors["herl"], linewidth=2, label="QRM − HRL-RM")
     ax.axhline(y=0, color="gray", linestyle="--", alpha=0.5)
-    ax.set_title("Reward Gap (vs QRM)", fontsize=12)
+    ax.set_title("Reward Gap", fontsize=12)
     ax.set_xlabel("Training Episode")
     ax.set_ylabel("Reward Difference")
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
 
-    fig.suptitle("Chop Cup — QRM vs HRL vs HERL-QRM", fontsize=14, fontweight="bold")
+    fig.suptitle("Chop Cup — QRM vs HRL vs HRL-RM", fontsize=14, fontweight="bold")
     fig.tight_layout()
     fig.savefig(out / "comparison_dashboard.png", dpi=150)
     fig.savefig(out / "comparison_dashboard.pdf")
@@ -586,7 +586,7 @@ def save_stats(stats: List[Dict], path: Path, method_name: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="3-way comparison: QRM vs HRL vs HERL-QRM on the Chop Cup."
+        description="3-way comparison: QRM vs HRL vs HRL-RM on the Chop Cup."
     )
     parser.add_argument("--episodes", type=int, default=1000)
     parser.add_argument("--eval-interval", type=int, default=10)
@@ -620,7 +620,7 @@ def main():
     )
 
     print("=" * 70)
-    print("  Chop Cup — QRM vs HRL vs HERL-QRM Comparison")
+    print("  Chop Cup — QRM vs HRL vs HRL-RM Comparison")
     print("=" * 70)
     print(f"  Episodes:     {args.episodes}")
     print(f"  Max steps:    {args.max_steps}")
@@ -652,7 +652,7 @@ def main():
     print(f"    Final success: {hrl_data[1][-1]:.2%}  |  reward: {hrl_data[3][-1]:.1f}")
 
     # --- 3. HERL-QRM ---
-    print("\n  [3/3] Training HERL-QRM (options + epistemic + RM)...")
+    print("\n  [3/3] Training HRL-RM (options + epistemic + RM)...")
     herl_kwargs = {**common_kwargs, "meta_epsilon": args.meta_epsilon}
     herl_data = run_multi_seed(
         train_herl_qrm,
@@ -673,7 +673,7 @@ def main():
 
     # --- Info JSON ---
     info = {
-        "methods": ["QRM", "HRL", "HERL-QRM"],
+        "methods": ["QRM", "HRL", "HRL-RM"],
         "episodes": args.episodes,
         "max_steps": args.max_steps,
         "max_limes": args.max_limes,
@@ -704,9 +704,9 @@ def main():
     print("-" * 70)
     print(f"  {'Method':<25} {'Success':>10} {'Reward':>10} {'Length':>10}")
     print("-" * 70)
-    for label, data in [("QRM (ours)", qrm_data),
-                        ("HRL (options only)", hrl_data),
-                        ("HERL-QRM (full)", herl_data)]:
+    for label, data in [("QRM", qrm_data),
+                        ("HRL", hrl_data),
+                        ("HRL-RM", herl_data)]:
         print(f"  {label:<25} {data[1][-1]:>9.2%} {data[3][-1]:>10.1f} {data[5][-1]:>10.1f}")
     print("=" * 70)
 

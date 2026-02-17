@@ -2,7 +2,7 @@
     "methods": [
         "QRM",
         "HRL",
-        "HERL-QRM"
+        "HRL-RM"
     ],
     "episodes": 1000,
     "max_steps": 100,
@@ -11,14 +11,14 @@
     "lr": 0.1,
     "epsilon": 0.1,
     "meta_epsilon": 0.2,
-    "seeds": 3,
+    "seeds": 5,
     "base_seed": 42,
     "eval_interval": 10,
     "eval_episodes": 50,
     "qrm_final_success": 1.0,
-    "hrl_final_success": 0.3333333333333333,
+    "hrl_final_success": 0.4,
     "herl_final_success": 1.0,
-    "qrm_final_reward": 46.666666666666664,
-    "hrl_final_reward": 0.3333333333333333,
-    "herl_final_reward": 40.0
+    "qrm_final_reward": 49.0,
+    "hrl_final_reward": 0.4,
+    "herl_final_reward": 43.0
 }

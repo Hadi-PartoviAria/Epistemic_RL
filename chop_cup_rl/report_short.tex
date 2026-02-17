@@ -226,7 +226,6 @@ State $u_4$ is only active when \texttt{enable\_limes = True}. In the base ball-
 
 % Lime Transitions
 \path
-    (u3) edge node[right] {\small $e$} (u4)
     (u4) edge node[below] {\small $k$ (+10.0)} (uT)
     (uT) edge[bend right=50] node[above] {\small $f$} (u4);
 \end{tikzpicture}
@@ -249,7 +248,6 @@ $h$ & $u_2 \to u_3$ & \texttt{ball\_visible} & Ball appears under cup \\
 $c$ & $u_3 \to u_0$ & \texttt{cup\_down} & Reset for another cycle \\
 $g$ & $u_3 \to u_T$ & \texttt{ball\_visible} $\land$ $\neg$\texttt{lime\_visible} & \textbf{Deception success! (+1.0)} \\
 \midrule
-$e$ & $u_3 \to u_4$ & $\IBel{\neg\text{lime\_cup}}$ & Lime loaded secretly \\
 $k$ & $u_4 \to u_T$ & \texttt{lime\_visible} & \textbf{Lime reveal! (+10.0)} \\
 $f$ & $u_T \to u_4$ & $\IBel{\neg\text{lime\_cup}}$ & Loop back to load more limes \\
 \bottomrule
@@ -505,22 +503,22 @@ We compare QRM against two baselines to evaluate the contribution of epistemic r
 \begin{enumerate}
     \item \textbf{HRL} (Hierarchical RL with Options)~\cite{sutton1999}: Two-level hierarchy where a meta-controller selects among 5 subgoals (\emph{palm}, \emph{show\_ball}, \emph{reset}, \emph{load\_lime}, \emph{show\_lime}) and a controller executes primitive actions to achieve each subgoal. Uses SMDP Q-learning with $\gamma^k$ discounting. The agent observes \emph{physical state only} (10 features) --- no beliefs, no RM state.
 
-    \item \textbf{HERL-QRM} (Hierarchical Epistemic RL with Reward Machines): The same two-level option hierarchy as HRL, but with the \emph{full epistemic observation} (physical + explicit/implicit beliefs + RM state). This ablation tests whether temporal abstraction adds value when combined with epistemic reasoning.
+    \item \textbf{HRL-RM} (Hierarchical RL with Reward Machines): The same two-level option hierarchy as HRL, but with the \emph{full epistemic observation} (physical + explicit/implicit beliefs + RM state). This ablation tests whether temporal abstraction adds value when combined with epistemic reasoning.
 \end{enumerate}
 
-All three methods were trained for 1000 episodes (\texttt{max\_steps}$=100$, \texttt{max\_limes}$=5$, $\gamma = 0.9$, $\alpha = 0.1$, $\varepsilon = 0.1$) and averaged over 3 random seeds.
+All three methods were trained for 1000 episodes (\texttt{max\_steps}$=100$, \texttt{max\_limes}$=5$, $\gamma = 0.9$, $\alpha = 0.1$, $\varepsilon = 0.1$) and averaged over 5 random seeds.
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.95\textwidth]{results_comparison/comparison_success.pdf}
-\caption{Success rate comparison: QRM vs HRL vs HERL-QRM (3-seed average, shaded $\pm 1$ std).}
+\caption{Success rate comparison: QRM vs HRL vs HRL-RM (5-seed average).}
 \label{fig:comparison_success}
 \end{figure}
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.95\textwidth]{results_comparison/comparison_reward.pdf}
-\caption{Reward comparison: QRM vs HRL vs HERL-QRM (3-seed average, shaded $\pm 1$ std).}
+\caption{Reward comparison: QRM vs HRL vs HRL-RM (5-seed average).}
 \label{fig:comparison_reward}
 \end{figure}
 
@@ -530,12 +528,12 @@ All three methods were trained for 1000 episodes (\texttt{max\_steps}$=100$, \te
 \toprule
 \textbf{Method} & \textbf{Success Rate} & \textbf{Mean Reward} & \textbf{Observation Space} \\
 \midrule
-\textbf{QRM (ours)} & \textbf{100\%} & \textbf{46.7} & Epistemic + RM (18+ feat.) \\
-HERL-QRM & 100\% & 40.0 & Epistemic + RM + Options \\
-HRL & 33\% & 0.3 & Physical only (10 feat.) \\
+\textbf{QRM with Epistemic logic} & \textbf{100\%} & \textbf{46.7} & Epistemic + RM \\
+HRL-RM & 100\% & 40.0 & Epistemic + RM \\
+HRL & 33\% & 0.3 & Physical only  \\
 \bottomrule
 \end{tabular}
-\caption{Final performance after 1000 training episodes (3-seed average).}
+\caption{Final performance after 1000 training episodes (5-seed average).}
 \label{tab:comparison}
 \end{table}
 
@@ -543,7 +541,7 @@ HRL & 33\% & 0.3 & Physical only (10 feat.) \\
 \begin{itemize}
     \item \textbf{Epistemic reasoning is essential.} HRL with physical-only observation achieves only 33\% success, demonstrating that the trick cannot be reliably learned without access to belief fluents. The agent cannot observe \emph{what the Observer believes}, so it cannot learn to manipulate those beliefs.
 
-    \item \textbf{QRM outperforms the hierarchical variants.} Although both QRM and HERL-QRM reach 100\% success, QRM achieves higher reward (46.7 vs 40.0) because flat primitive actions allow finer-grained optimization of the lime loop timing. The SMDP discounting in hierarchical methods ($\gamma^k$ for $k$-step options) reduces the effective credit signal for multi-step options.
+    \item \textbf{QRM outperforms the hierarchical variants.} Although both QRM and HRL-RM reach 100\% success, QRM achieves higher reward (46.7 vs 40.0) because flat primitive actions allow finer-grained optimization of the lime loop timing. The SMDP discounting in hierarchical methods ($\gamma^k$ for $k$-step options) reduces the effective credit signal for multi-step options.
 
     \item \textbf{Temporal abstraction adds limited value in this domain.} The Chop Cup trick has a short action horizon (4--10 steps per phase), so the overhead of option selection does not pay off. Hierarchical methods are better suited for domains with much longer horizons where primitive-action RL struggles with exploration.
 \end{itemize}

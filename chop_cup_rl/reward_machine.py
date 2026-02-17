@@ -68,7 +68,6 @@ class RewardMachine:
           h: ball_visible        — ball appears (reveal)
           c: cup_down            — reset (cup placed back down)
           g: ball_only           — ball milestone (can continue to limes)
-          e: □(¬lime_cup)        — observer believes no lime (load)
           k: lime_visible        — lime shown + milestone
           f: □(¬lime_cup)        — loop back to load more limes
         """
@@ -103,17 +102,8 @@ class RewardMachine:
             description="Ball magically appears! (Appear effect)",
         ))
 
-        # ---- From U3: lime phase (if enabled) takes priority over reset ----
-        if self.enable_limes:
-            # e: u3 → u4 — Enter lime phase (cup placed back, observer believes no lime)
-            # Agent CHOOSES this path by placing the cup (cup_down=True)
-            # instead of ending the trick (revealing hand while ball_visible)
-            transitions.append(RMTransition(
-                source=RMState.U3, target=RMState.U4, label="e",
-                condition=lambda s: s.has("cup_down") and s.implicit_belief("lime_cup", positive=False),
-                reward=shape,
-                description="Enter lime phase — observer believes no lime",
-            ))
+        # ---- From U3: milestone or reset ----
+        # (Lime phase is entered via uT → u4 using transition f)
 
         # c: u3 → u0 — Reset for another cycle (no reward)
         transitions.append(RMTransition(

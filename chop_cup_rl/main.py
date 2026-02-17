@@ -354,7 +354,7 @@ def _generate_plots(stats_history: List[Dict], output_dir: str, enable_limes: bo
     # --- Plot 1: Success Rate ---
     fig, ax = plt.subplots(1, 1, figsize=(10, 6))
     ax.plot(episodes, success_rates, "b-", linewidth=2, label="Terminal Success Rate")
-    ax.plot(episodes, appear_rates, "r--", linewidth=1.5, label="Appear Rate (u3+)")
+    ax.plot(episodes, appear_rates, "r--", linewidth=1.5, label="Appear Rate")
     ax.set_xlabel("Training Episode", fontsize=13)
     ax.set_ylabel("Rate", fontsize=13)
     ax.set_title("Chop Cup RL — Learning Curve (Epistemic Deception)", fontsize=14)
@@ -368,7 +368,7 @@ def _generate_plots(stats_history: List[Dict], output_dir: str, enable_limes: bo
 
     # --- Plot 2: Reward ---
     fig, ax = plt.subplots(1, 1, figsize=(10, 6))
-    ax.plot(episodes, rewards_ma, "g-", linewidth=2, label="Total Reward (MA-50)")
+    ax.plot(episodes, rewards_ma, "g-", linewidth=2, label="Total Reward")
     ax.set_xlabel("Training Episode", fontsize=13)
     ax.set_ylabel("Average Reward", fontsize=13)
     ax.set_title("Chop Cup RL — Reward Convergence", fontsize=14)

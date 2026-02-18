@@ -498,9 +498,11 @@ Each plateau corresponds to the agent learning to squeeze one additional lime cy
 \subsection{Baseline Comparison}
 % ===========================================================================
 
-We compare QRM against three baselines to evaluate the contribution of epistemic reasoning, reward machine structure, and function approximation:
+We compare QRM against four baselines to evaluate the contribution of epistemic reasoning, reward machine structure, reward shaping, and function approximation:
 
 \begin{enumerate}
+    \item \textbf{QRM+PBRS} (QRM with Potential-Based Reward Shaping)~\cite{ng1999}: Identical to QRM but augmented with a shaping bonus $F(s,s') = \gamma \cdot \Phi(u') - \Phi(u)$ on each transition, where $\Phi(u)$ is a potential function over RM states. The potential encodes domain progress: $\Phi(u_0)=0$, $\Phi(u_1)=1$, $\Phi(u_2)=2$, $\Phi(u_3)=3$, $\Phi(u_4)=4$, $\Phi(u_T)=5$. By the Ng--Harada--Russell theorem, this preserves the optimal policy while providing denser intermediate credit.
+
     \item \textbf{HRL} (Hierarchical RL with Options)~\cite{sutton1999}: Two-level hierarchy where a meta-controller selects among 5 subgoals (\emph{palm}, \emph{show\_ball}, \emph{reset}, \emph{load\_lime}, \emph{show\_lime}) and a controller executes primitive actions to achieve each subgoal. Uses SMDP Q-learning with $\gamma^k$ discounting. The agent observes \emph{physical state only} (10 features) --- no beliefs, no RM state.
 
     \item \textbf{HRL-RM} (Hierarchical RL with Reward Machines): The same two-level option hierarchy as HRL, but with the \emph{full epistemic observation} (physical + explicit/implicit beliefs + RM state). This ablation tests whether temporal abstraction adds value when combined with epistemic reasoning.
@@ -508,19 +510,19 @@ We compare QRM against three baselines to evaluate the contribution of epistemic
     \item \textbf{DDQN} (Double Deep Q-Network)~\cite{vanhasselt2016}: A neural network baseline using a two-layer MLP (128 hidden units) to approximate $Q(s,a)$. Uses the same epistemic observation as QRM (physical fluents + explicit beliefs + RM state index) encoded as a 19-dimensional float vector. The online network selects actions while a separate target network (updated every 100 steps) evaluates them, reducing overestimation bias. Trained with experience replay (buffer size 50k, batch size 64), $\varepsilon$-greedy exploration decaying from 1.0 to 0.05, and Adam optimiser ($\text{lr}=10^{-3}$).
 \end{enumerate}
 
-All four methods were trained for 1000 episodes (\texttt{max\_steps}$=100$, \texttt{max\_limes}$=5$, $\gamma = 0.9$) and averaged over 5 random seeds. QRM, HRL, and HRL-RM use tabular Q-learning ($\alpha = 0.1$, $\varepsilon = 0.1$); DDQN uses neural function approximation.
+All five methods were trained for 1000 episodes (\texttt{max\_steps}$=100$, \texttt{max\_limes}$=5$, $\gamma = 0.9$) and averaged over 5 random seeds. QRM, QRM+PBRS, HRL, and HRL-RM use tabular Q-learning ($\alpha = 0.1$, $\varepsilon = 0.1$); DDQN uses neural function approximation.
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.95\textwidth]{results_comparison/comparison_success.pdf}
-\caption{Success rate comparison: QRM vs HRL vs HRL-RM vs DDQN (5-seed average).}
+\caption{Success rate comparison: 5-way (5-seed average).}
 \label{fig:comparison_success}
 \end{figure}
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.95\textwidth]{results_comparison/comparison_reward.pdf}
-\caption{Reward comparison: QRM vs HRL vs HRL-RM vs DDQN (5-seed average).}
+\caption{Reward comparison: 5-way (5-seed average).}
 \label{fig:comparison_reward}
 \end{figure}
 
@@ -530,7 +532,8 @@ All four methods were trained for 1000 episodes (\texttt{max\_steps}$=100$, \tex
 \toprule
 \textbf{Method} & \textbf{Success Rate} & \textbf{Mean Reward} & \textbf{Observation Space} \\
 \midrule
-\textbf{QRM with Epistemic logic} & \textbf{100\%} & \textbf{49.0} & Epistemic + RM (tabular) \\
+QRM+PBRS & 100\% & \textbf{51.0} & Epistemic + RM + shaping (tabular) \\
+\textbf{QRM with Epistemic logic} & \textbf{100\%} & 49.0 & Epistemic + RM (tabular) \\
 HRL-RM & 100\% & 43.0 & Epistemic + RM (tabular) \\
 HRL & 40\% & 0.4 & Physical only (tabular) \\
 DDQN & 20\% & 0.2 & Epistemic + RM (neural) \\
@@ -542,6 +545,8 @@ DDQN & 20\% & 0.2 & Epistemic + RM (neural) \\
 
 \textbf{Key findings:}
 \begin{itemize}
+    \item \textbf{Potential-based reward shaping improves reward optimisation.} QRM+PBRS achieves 51.0 mean reward vs QRM's 49.0, both at 100\% success. The RM-state potential function provides intermediate credit for phase transitions $F(s,s') = \gamma\Phi(u') - \Phi(u)$, enabling the agent to discover one additional lime cycle within the 100-step budget. This confirms the Ng--Harada--Russell guarantee: shaping preserves the optimal policy ($\pi^* = \arg\max_a Q'(s,a) = \arg\max_a Q(s,a)$) while accelerating convergence through denser reward signal.
+
     \item \textbf{Epistemic reasoning is essential.} HRL with physical-only observation achieves only 40\% success, demonstrating that the trick cannot be reliably learned without access to belief fluents. The agent cannot observe \emph{what the Observer believes}, so it cannot learn to manipulate those beliefs.
 
     \item \textbf{QRM outperforms the hierarchical variants.} Although both QRM and HRL-RM reach 100\% success, QRM achieves higher reward (49.0 vs 43.0) because flat primitive actions allow finer-grained optimization of the lime loop timing. The SMDP discounting in hierarchical methods ($\gamma^k$ for $k$-step options) reduces the effective credit signal for multi-step options.
@@ -751,6 +756,11 @@ R.~S.~Sutton, D.~Precup, and S.~Singh.
 H.~van Hasselt, A.~Guez, and D.~Silver.
 \newblock Deep Reinforcement Learning with Double Q-Learning.
 \newblock In {\em Proceedings of AAAI 2016}, pages 2094--2100, 2016.
+
+\bibitem{ng1999}
+A.~Y.~Ng, D.~Harada, and S.~Russell.
+\newblock Policy Invariance Under Reward Transformations: Theory and Application to Reward Shaping.
+\newblock In {\em Proceedings of ICML 1999}, pages 278--287, 1999.
 
 \end{thebibliography}
 

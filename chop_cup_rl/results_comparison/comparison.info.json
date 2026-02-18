@@ -1,6 +1,7 @@
 {
     "methods": [
         "QRM",
+        "QRM+PBRS",
         "HRL",
         "HRL-RM",
         "DDQN"
@@ -17,10 +18,12 @@
     "eval_interval": 10,
     "eval_episodes": 50,
     "qrm_final_success": 1.0,
+    "pbrs_final_success": 1.0,
     "hrl_final_success": 0.4,
     "herl_final_success": 1.0,
     "ddqn_final_success": 0.2,
     "qrm_final_reward": 49.0,
+    "pbrs_final_reward": 51.0,
     "hrl_final_reward": 0.4,
     "herl_final_reward": 43.0,
     "ddqn_final_reward": 0.2

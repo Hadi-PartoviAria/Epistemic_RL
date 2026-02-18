@@ -1,14 +1,15 @@
 """
-4-Way Comparison Runner — QRM vs HRL vs HRL-RM vs DDQN on the Chop Cup Magic Trick.
+5-Way Comparison Runner — QRM vs QRM+PBRS vs HRL vs HRL-RM vs DDQN on the Chop Cup.
 
-Trains all four agents on the same environment, evaluates periodically,
+Trains all five agents on the same environment, evaluates periodically,
 and generates side-by-side comparison plots.
 
 Methods compared:
   1. QRM      — Q-Learning for Reward Machines (epistemic obs + RM, flat actions)
-  2. HRL      — Hierarchical RL with options (physical obs only, no RM)
-  3. HRL-RM   — Hierarchical RL + epistemic obs + RM (best of both)
-  4. DDQN     — Double Deep Q-Network (neural network, epistemic obs + RM)
+  2. QRM+PBRS — QRM with Potential-Based Reward Shaping (Ng et al., 1999)
+  3. HRL      — Hierarchical RL with options (physical obs only, no RM)
+  4. HRL-RM   — Hierarchical RL + epistemic obs + RM (best of both)
+  5. DDQN     — Double Deep Q-Network (neural network, epistemic obs + RM)
 
 Usage:
     python run_comparison.py --episodes 1000 --max-steps 100 --max-limes 5 --seed 42
@@ -31,6 +32,7 @@ import numpy as np
 from chop_cup_env import ChopCupEnv
 from reward_machine import RMState, RewardMachine
 from qrm import QRMAgent
+from qrm_pbrs import QRMPBRSAgent
 from hrl_agent import HRLAgent, SUBGOALS
 from hrl_qrm import HRLQRMAgent
 from ddqn_agent import DDQNAgent, _obs_to_vector
@@ -258,6 +260,72 @@ def train_qrm(
     eval_env = ChopCupEnv(enable_limes=enable_limes, max_limes=max_limes, max_steps=max_steps)
 
     agent = QRMAgent(
+        reward_machine=env.reward_machine,
+        discount_factor=discount,
+        learning_rate=lr,
+        epsilon=epsilon,
+        q_init=q_init,
+    )
+
+    stats: List[Dict] = []
+    result = evaluate_qrm(eval_env, agent, eval_episodes, max_steps, seed + 10000)
+    stats.append({"episode": 0, **result})
+
+    for ep in range(1, num_episodes + 1):
+        random.seed(seed + ep)
+        env.reset()
+        obs = env.get_env_observation()
+        step = 0
+
+        while not env.done and step < max_steps:
+            available = env.get_available_actions()
+            if not available:
+                break
+
+            old_obs = obs
+            old_rm = env.reward_machine.get_state()
+            action = agent.select_action(obs, old_rm, available)
+
+            _, _, reward, _, _ = env.step(action)
+            obs = env.get_env_observation()
+            new_rm = env.reward_machine.get_state()
+            new_available = env.get_available_actions()
+
+            agent.update(old_obs, action, obs, old_rm, new_rm, reward, new_available)
+            step += 1
+
+        agent.training_episodes = ep
+
+        if ep % eval_interval == 0:
+            result = evaluate_qrm(eval_env, agent, eval_episodes, max_steps,
+                                  seed + 10000 + ep)
+            stats.append({"episode": ep, **result})
+
+    return stats
+
+
+def train_qrm_pbrs(
+    num_episodes: int,
+    max_steps: int,
+    eval_interval: int,
+    eval_episodes: int,
+    discount: float,
+    lr: float,
+    epsilon: float,
+    q_init: float,
+    enable_limes: bool,
+    max_limes: int,
+    seed: int,
+    **_extra,
+) -> List[Dict]:
+    """Train QRM+PBRS agent and return evaluation stats at regular intervals."""
+    random.seed(seed)
+    np.random.seed(seed)
+
+    env = ChopCupEnv(enable_limes=enable_limes, max_limes=max_limes, max_steps=max_steps)
+    eval_env = ChopCupEnv(enable_limes=enable_limes, max_limes=max_limes, max_steps=max_steps)
+
+    agent = QRMPBRSAgent(
         reward_machine=env.reward_machine,
         discount_factor=discount,
         learning_rate=lr,
@@ -568,6 +636,7 @@ def plot_comparison(
     herl_data: Tuple,
     output_dir: str,
     ddqn_data: Tuple = None,
+    pbrs_data: Tuple = None,
 ) -> None:
     """Generate comparison plots.
 
@@ -592,20 +661,27 @@ def plot_comparison(
 
     colors = {
         "qrm":  "#2196F3",   # blue  — user's method
+        "pbrs": "#9C27B0",   # purple — QRM + PBRS
         "hrl":  "#FF9800",   # orange
         "herl": "#4CAF50",   # green
         "ddqn": "#E91E63",   # pink
     }
     labels = {
         "qrm":  "QRM",
+        "pbrs": "QRM+PBRS",
         "hrl":  "HRL",
         "herl": "HRL-RM",
         "ddqn": "DDQN",
     }
 
-    # Build datasets list (3 or 4 methods)
+    # Build datasets list
     all_datasets = [
         (q_ep, qrm_data, "qrm"),
+    ]
+    if pbrs_data is not None:
+        p_ep = np.array(pbrs_data[0])
+        all_datasets.append((p_ep, pbrs_data, "pbrs"))
+    all_datasets += [
         (r_ep, hrl_data, "hrl"),
         (h_ep, herl_data, "herl"),
     ]
@@ -649,7 +725,7 @@ def plot_comparison(
 
     # 2. Total Reward
     fig, ax = plt.subplots(figsize=(10, 6))
-    _plot_metric(ax, 1, "Mean Total Reward", "Reward Comparison")
+    _plot_metric(ax, 1, "Mean Total Reward", "Reward Comparison", clip=(0, None))
     fig.tight_layout()
     fig.savefig(out / "comparison_reward.png", dpi=150)
     fig.savefig(out / "comparison_reward.pdf")
@@ -667,16 +743,22 @@ def plot_comparison(
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
     _plot_metric(axes[0, 0], 0, "Rate", "Success Rate", ylim=(-0.05, 1.05), clip=(0, 1))
-    _plot_metric(axes[0, 1], 1, "Mean Reward", "Total Reward")
+    _plot_metric(axes[0, 1], 1, "Mean Reward", "Total Reward", clip=(0, None))
     _plot_metric(axes[1, 0], 2, "Mean Steps", "Episode Length")
 
     # 4th panel: reward gap (QRM − others)
     ax = axes[1, 1]
     all_rw = [q_rw, r_rw, h_rw]
+    if pbrs_data is not None:
+        all_rw.append(pbrs_data[3])
     if ddqn_data is not None:
         all_rw.append(ddqn_data[3])
     min_len = min(len(rw) for rw in all_rw)
     ep_c = np.array(q_ep[:min_len])
+    if pbrs_data is not None:
+        p_rw = pbrs_data[3]
+        gap_pbrs = np.array(q_rw[:min_len]) - np.array(p_rw[:min_len])
+        ax.plot(ep_c, gap_pbrs, color=colors["pbrs"], linewidth=2, label="QRM − QRM+PBRS")
     gap_hrl  = np.array(q_rw[:min_len]) - np.array(r_rw[:min_len])
     gap_herl = np.array(q_rw[:min_len]) - np.array(h_rw[:min_len])
     ax.plot(ep_c, gap_hrl,  color=colors["hrl"],  linewidth=2, label="QRM − HRL")
@@ -689,12 +771,10 @@ def plot_comparison(
     ax.set_title("Reward Gap", fontsize=12)
     ax.set_xlabel("Training Episode")
     ax.set_ylabel("Reward Difference")
-    ax.legend(fontsize=9)
+    ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3)
 
-    title = "Chop Cup — QRM vs HRL vs HRL-RM"
-    if ddqn_data is not None:
-        title += " vs DDQN"
+    title = "Chop Cup — 5-Way Comparison"
     fig.suptitle(title, fontsize=14, fontweight="bold")
     fig.tight_layout()
     fig.savefig(out / "comparison_dashboard.png", dpi=150)
@@ -718,6 +798,54 @@ def save_stats(stats: List[Dict], path: Path, method_name: str) -> None:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(stats)
+
+
+def save_stats_excel(all_method_data: Dict[str, List[Dict]], path: Path) -> None:
+    """Save per-method Excel files and one combined workbook.
+
+    Args:
+        all_method_data: {display_label: [row_dicts, ...]}
+        path: output directory
+    """
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    header_font = Font(bold=True)
+    header_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+
+    def _write_sheet(ws, rows):
+        if not rows:
+            return
+        headers = list(rows[0].keys())
+        for c, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=c, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+        for r, row in enumerate(rows, 2):
+            for c, h in enumerate(headers, 1):
+                ws.cell(row=r, column=c, value=row[h])
+        # Auto-size columns
+        for c in range(1, len(headers) + 1):
+            ws.column_dimensions[get_column_letter(c)].width = 18
+
+    # Individual workbooks per method
+    for label, rows in all_method_data.items():
+        wb = Workbook()
+        ws = wb.active
+        ws.title = label
+        _write_sheet(ws, rows)
+        fname = label.lower().replace("-", "_").replace(" ", "_")
+        wb.save(path / f"{fname}.stats.xlsx")
+
+    # Combined workbook with all methods as sheets
+    wb = Workbook()
+    wb.remove(wb.active)  # remove default empty sheet
+    for label, rows in all_method_data.items():
+        ws = wb.create_sheet(title=label)
+        _write_sheet(ws, rows)
+    wb.save(path / "comparison_all.xlsx")
 
 
 # ==========================================================================
@@ -760,7 +888,7 @@ def main():
     )
 
     print("=" * 70)
-    print("  Chop Cup — QRM vs HRL vs HRL-RM vs DDQN Comparison")
+    print("  Chop Cup — QRM vs QRM+PBRS vs HRL vs HRL-RM vs DDQN")
     print("=" * 70)
     print(f"  Episodes:     {args.episodes}")
     print(f"  Max steps:    {args.max_steps}")
@@ -771,7 +899,7 @@ def main():
     print("=" * 70)
 
     # --- 1. QRM (user's method) ---
-    print("\n  [1/4] Training QRM (epistemic + Reward Machine, flat actions)...")
+    print("\n  [1/5] Training QRM (epistemic + Reward Machine, flat actions)...")
     qrm_data = run_multi_seed(
         train_qrm,
         num_seeds=args.seeds,
@@ -780,8 +908,18 @@ def main():
     )
     print(f"    Final success: {qrm_data[1][-1]:.2%}  |  reward: {qrm_data[3][-1]:.1f}")
 
-    # --- 2. HRL baseline ---
-    print("\n  [2/4] Training HRL (options, physical only)...")
+    # --- 2. QRM + PBRS ---
+    print("\n  [2/5] Training QRM+PBRS (QRM + potential-based reward shaping)...")
+    pbrs_data = run_multi_seed(
+        train_qrm_pbrs,
+        num_seeds=args.seeds,
+        base_seed=args.seed,
+        **common_kwargs,
+    )
+    print(f"    Final success: {pbrs_data[1][-1]:.2%}  |  reward: {pbrs_data[3][-1]:.1f}")
+
+    # --- 3. HRL baseline ---
+    print("\n  [3/5] Training HRL (options, physical only)...")
     hrl_kwargs = {**common_kwargs, "meta_epsilon": args.meta_epsilon}
     hrl_data = run_multi_seed(
         train_hrl,
@@ -791,8 +929,8 @@ def main():
     )
     print(f"    Final success: {hrl_data[1][-1]:.2%}  |  reward: {hrl_data[3][-1]:.1f}")
 
-    # --- 3. HRL-RM ---
-    print("\n  [3/4] Training HRL-RM (options + epistemic + RM)...")
+    # --- 4. HRL-RM ---
+    print("\n  [4/5] Training HRL-RM (options + epistemic + RM)...")
     herl_kwargs = {**common_kwargs, "meta_epsilon": args.meta_epsilon}
     herl_data = run_multi_seed(
         train_herl_qrm,
@@ -802,8 +940,8 @@ def main():
     )
     print(f"    Final success: {herl_data[1][-1]:.2%}  |  reward: {herl_data[3][-1]:.1f}")
 
-    # --- 4. DDQN ---
-    print("\n  [4/4] Training DDQN (neural network, epistemic obs + RM)...")
+    # --- 5. DDQN ---
+    print("\n  [5/5] Training DDQN (neural network, epistemic obs + RM)...")
     ddqn_data = run_multi_seed(
         train_ddqn,
         num_seeds=args.seeds,
@@ -813,17 +951,25 @@ def main():
     print(f"    Final success: {ddqn_data[1][-1]:.2%}  |  reward: {ddqn_data[3][-1]:.1f}")
 
     # --- Save per-method CSV ---
-    for data, name in [(qrm_data, "qrm"), (hrl_data, "hrl"),
-                       (herl_data, "herl_qrm"), (ddqn_data, "ddqn")]:
+    all_method_rows = {}
+    for data, name, label in [(qrm_data, "qrm", "QRM"),
+                               (pbrs_data, "qrm_pbrs", "QRM+PBRS"),
+                               (hrl_data, "hrl", "HRL"),
+                               (herl_data, "herl_qrm", "HRL-RM"),
+                               (ddqn_data, "ddqn", "DDQN")]:
         rows = [
             {"episode": e, "success_rate": s, "mean_reward": r, "mean_length": l}
             for e, s, r, l in zip(data[0], data[1], data[3], data[5])
         ]
         save_stats(rows, out, name)
+        all_method_rows[label] = rows
+
+    # --- Save Excel files ---
+    save_stats_excel(all_method_rows, out)
 
     # --- Info JSON ---
     info = {
-        "methods": ["QRM", "HRL", "HRL-RM", "DDQN"],
+        "methods": ["QRM", "QRM+PBRS", "HRL", "HRL-RM", "DDQN"],
         "episodes": args.episodes,
         "max_steps": args.max_steps,
         "max_limes": args.max_limes,
@@ -836,10 +982,12 @@ def main():
         "eval_interval": args.eval_interval,
         "eval_episodes": args.eval_episodes,
         "qrm_final_success": float(qrm_data[1][-1]),
+        "pbrs_final_success": float(pbrs_data[1][-1]),
         "hrl_final_success": float(hrl_data[1][-1]),
         "herl_final_success": float(herl_data[1][-1]),
         "ddqn_final_success": float(ddqn_data[1][-1]),
         "qrm_final_reward": float(qrm_data[3][-1]),
+        "pbrs_final_reward": float(pbrs_data[3][-1]),
         "hrl_final_reward": float(hrl_data[3][-1]),
         "herl_final_reward": float(herl_data[3][-1]),
         "ddqn_final_reward": float(ddqn_data[3][-1]),
@@ -848,7 +996,8 @@ def main():
         json.dump(info, f, indent=4)
 
     # --- Plots ---
-    plot_comparison(qrm_data, hrl_data, herl_data, args.output, ddqn_data=ddqn_data)
+    plot_comparison(qrm_data, hrl_data, herl_data, args.output,
+                    ddqn_data=ddqn_data, pbrs_data=pbrs_data)
 
     # --- Summary table ---
     print("\n" + "=" * 70)
@@ -857,6 +1006,7 @@ def main():
     print(f"  {'Method':<25} {'Success':>10} {'Reward':>10} {'Length':>10}")
     print("-" * 70)
     for label, data in [("QRM", qrm_data),
+                        ("QRM+PBRS", pbrs_data),
                         ("HRL", hrl_data),
                         ("HRL-RM", herl_data),
                         ("DDQN", ddqn_data)]:

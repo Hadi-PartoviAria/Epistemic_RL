@@ -1,7 +1,7 @@
 # Fdb version 4
-["pdflatex"] 1771380189 "/home/zhexu/Desktop/Magic_cup/epirl-main/chop_cup_rl/report_short.tex" "report_short.pdf" "report_short" 1771380190 0
+["pdflatex"] 1771391577 "/home/zhexu/Desktop/Magic_cup/epirl-main/chop_cup_rl/report_short.tex" "report_short.pdf" "report_short" 1771391577 0
   "/etc/texmf/web2c/texmf.cnf" 1693644527 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/zhexu/Desktop/Magic_cup/epirl-main/chop_cup_rl/report_short.tex" 1771367960 45287 1c7e2288e8c79db72a654d617bc1299c ""
+  "/home/zhexu/Desktop/Magic_cup/epirl-main/chop_cup_rl/report_short.tex" 1771391576 46611 49510d0b20f1ed92366b0851cfdebd56 ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/jknappen/ec/tcrm1095.tfm" 1136768653 1536 02c06700a42be0f5a28664c7273f82e7 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm" 1246382020 1004 54797486969f23fa377b128694d548df ""
@@ -194,12 +194,12 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1676468108 39561 34c98e380bf7c7201ee6a7909aff625a ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1716919199 4515591 4a0353234f6bee3c83c4d65f074113c5 ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1716919225 6511695 409a0fbf673406130656f8d4093073dc ""
-  "report_short.aux" 1771380189 5398 64f2dae175883372c2cc62c3c85a744b "pdflatex"
-  "report_short.out" 1771380189 3310 083291e96c33ab04eaabcd955b368462 "pdflatex"
-  "report_short.tex" 1771367960 45287 1c7e2288e8c79db72a654d617bc1299c ""
+  "report_short.aux" 1771391577 5344 1fe99883a34fa9b5293d6e133fbdfde4 "pdflatex"
+  "report_short.out" 1771391577 3310 083291e96c33ab04eaabcd955b368462 "pdflatex"
+  "report_short.tex" 1771391576 46611 49510d0b20f1ed92366b0851cfdebd56 ""
   "results/reward_curve.pdf" 1771380189 14290 6a1d7d54c44a8ed49288ce9da4378643 ""
-  "results_comparison/comparison_reward.pdf" 1771376948 19682 d87e65eed7d5032a5b9648d68bdcb528 ""
-  "results_comparison/comparison_success.pdf" 1771376947 17123 3990aee644213b2208ee4d40ea7b1c3f ""
+  "results_comparison/comparison_reward.pdf" 1771391519 21190 664e1afba57cbf10faf5406693910e5f ""
+  "results_comparison/comparison_success.pdf" 1771391519 18166 fef3c778826e6b6b6899b76a1c38b9d3 ""
   "results_new_rm/reward_curve.pdf" 1771286638 15254 24c76f1e82130947b7ac0ed5d6e58924 ""
   (generated)
   "report_short.aux"

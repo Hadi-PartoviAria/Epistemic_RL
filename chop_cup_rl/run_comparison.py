@@ -32,7 +32,7 @@ from chop_cup_env import ChopCupEnv
 from reward_machine import RMState, RewardMachine
 from qrm import QRMAgent
 from hrl_agent import HRLAgent, SUBGOALS
-from herl_qrm import HERLQRMAgent
+from hrl_qrm import HRLQRMAgent
 from ddqn_agent import DDQNAgent, _obs_to_vector
 
 
@@ -394,7 +394,7 @@ def train_herl_qrm(
     env = ChopCupEnv(enable_limes=enable_limes, max_limes=max_limes, max_steps=max_steps)
     eval_env = ChopCupEnv(enable_limes=enable_limes, max_limes=max_limes, max_steps=max_steps)
 
-    agent = HERLQRMAgent(
+    agent = HRLQRMAgent(
         reward_machine=env.reward_machine,
         discount=discount,
         lr=lr,
@@ -613,15 +613,21 @@ def plot_comparison(
         d_ep = np.array(ddqn_data[0])
         all_datasets.append((d_ep, ddqn_data, "ddqn"))
 
-    def _plot_metric(ax, metric_idx, ylabel, title, ylim=None):
+    def _plot_metric(ax, metric_idx, ylabel, title, ylim=None, clip=None):
         """Plot a single metric for all methods.
         metric_idx: 0=success, 1=reward, 2=length (indexing mean/std pairs)
+        clip: optional (lo, hi) to clamp the shaded band (e.g. (0,1) for rates)
         """
         for ep_arr, data, key in all_datasets:
             mean = data[1 + metric_idx * 2]
             std  = data[2 + metric_idx * 2]
             ax.plot(ep_arr, mean, color=colors[key], linewidth=2, label=labels[key])
-            ax.fill_between(ep_arr, mean - std, mean + std,
+            lo = mean - std
+            hi = mean + std
+            if clip is not None:
+                lo = np.clip(lo, clip[0], clip[1])
+                hi = np.clip(hi, clip[0], clip[1])
+            ax.fill_between(ep_arr, lo, hi,
                             alpha=0.12, color=colors[key])
         ax.set_xlabel("Training Episode", fontsize=12)
         ax.set_ylabel(ylabel, fontsize=12)
@@ -635,7 +641,7 @@ def plot_comparison(
 
     # 1. Success Rate
     fig, ax = plt.subplots(figsize=(10, 6))
-    _plot_metric(ax, 0, "Success Rate", "Success Rate Comparison", ylim=(-0.05, 1.05))
+    _plot_metric(ax, 0, "Success Rate", "Success Rate Comparison", ylim=(-0.05, 1.05), clip=(0, 1))
     fig.tight_layout()
     fig.savefig(out / "comparison_success.png", dpi=150)
     fig.savefig(out / "comparison_success.pdf")
@@ -660,7 +666,7 @@ def plot_comparison(
     # 4. Dashboard (2×2)
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-    _plot_metric(axes[0, 0], 0, "Rate", "Success Rate", ylim=(-0.05, 1.05))
+    _plot_metric(axes[0, 0], 0, "Rate", "Success Rate", ylim=(-0.05, 1.05), clip=(0, 1))
     _plot_metric(axes[0, 1], 1, "Mean Reward", "Total Reward")
     _plot_metric(axes[1, 0], 2, "Mean Steps", "Episode Length")
 

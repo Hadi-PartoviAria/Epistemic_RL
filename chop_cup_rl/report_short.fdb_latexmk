@@ -1,7 +1,7 @@
 # Fdb version 4
-["pdflatex"] 1771365381 "/home/zhexu/Desktop/Magic_cup/epirl-main/chop_cup_rl/report_short.tex" "report_short.pdf" "report_short" 1771365382 0
+["pdflatex"] 1771380189 "/home/zhexu/Desktop/Magic_cup/epirl-main/chop_cup_rl/report_short.tex" "report_short.pdf" "report_short" 1771380190 0
   "/etc/texmf/web2c/texmf.cnf" 1693644527 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/zhexu/Desktop/Magic_cup/epirl-main/chop_cup_rl/report_short.tex" 1771365252 43815 ed6d9d585e4389b81a54c8f1b547778d ""
+  "/home/zhexu/Desktop/Magic_cup/epirl-main/chop_cup_rl/report_short.tex" 1771367960 45287 1c7e2288e8c79db72a654d617bc1299c ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/jknappen/ec/tcrm1095.tfm" 1136768653 1536 02c06700a42be0f5a28664c7273f82e7 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm" 1246382020 1004 54797486969f23fa377b128694d548df ""
@@ -50,6 +50,7 @@
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb" 1248133631 32726 0a1aea6fcd6468ee2cf64d891f5c43c8 ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb" 1248133631 33993 9b89b85fd2d9df0482bd47194d1d3bf3 ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb" 1248133631 32569 5e5ddc8df908dea60932f3c484a54c0d ""
+  "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb" 1248133631 32626 4f5c1b83753b1dd3a97d1b399a005b4b ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb" 1248133631 37944 359e864bd06cde3b1cf57bb20757fb06 ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb" 1248133631 31099 c85edf1dd5b9e826d67c9c7293b6786c ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt9.pfb" 1248133631 29078 718ea4567ceff944262b0f5b0800e1d9 ""
@@ -193,12 +194,12 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1676468108 39561 34c98e380bf7c7201ee6a7909aff625a ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1716919199 4515591 4a0353234f6bee3c83c4d65f074113c5 ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1716919225 6511695 409a0fbf673406130656f8d4093073dc ""
-  "report_short.aux" 1771365381 5312 492c83b690528afd4e4ee3ec890b1343 "pdflatex"
-  "report_short.out" 1771365381 3310 083291e96c33ab04eaabcd955b368462 "pdflatex"
-  "report_short.tex" 1771365252 43815 ed6d9d585e4389b81a54c8f1b547778d ""
-  "results/reward_curve.pdf" 1771365381 14165 b8e7202bfb62986bf86c9c4c1cb3ff2c ""
-  "results_comparison/comparison_reward.pdf" 1771365322 18056 6d234e9ecbb5881ec2fb2f869d67514e ""
-  "results_comparison/comparison_success.pdf" 1771365322 16173 9024f0d01158f313fa67596825c7a75f ""
+  "report_short.aux" 1771380189 5398 64f2dae175883372c2cc62c3c85a744b "pdflatex"
+  "report_short.out" 1771380189 3310 083291e96c33ab04eaabcd955b368462 "pdflatex"
+  "report_short.tex" 1771367960 45287 1c7e2288e8c79db72a654d617bc1299c ""
+  "results/reward_curve.pdf" 1771380189 14290 6a1d7d54c44a8ed49288ce9da4378643 ""
+  "results_comparison/comparison_reward.pdf" 1771376948 19682 d87e65eed7d5032a5b9648d68bdcb528 ""
+  "results_comparison/comparison_success.pdf" 1771376947 17123 3990aee644213b2208ee4d40ea7b1c3f ""
   "results_new_rm/reward_curve.pdf" 1771286638 15254 24c76f1e82130947b7ac0ed5d6e58924 ""
   (generated)
   "report_short.aux"

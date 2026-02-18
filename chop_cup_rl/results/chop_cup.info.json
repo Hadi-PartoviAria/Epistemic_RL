@@ -6,11 +6,11 @@
     "learning_rate": 0.1,
     "epsilon": 0.1,
     "q_init": 0.0,
-    "num_episodes": 1000,
-    "max_episode_len": 100,
+    "num_episodes": 500,
+    "max_episode_len": 50,
     "enable_limes": true,
-    "max_limes": 5,
+    "max_limes": 3,
     "evaluation_interval": 1,
     "evaluation_num_episodes": 100,
-    "evaluation_max_episode_len": 100
+    "evaluation_max_episode_len": 50
 }

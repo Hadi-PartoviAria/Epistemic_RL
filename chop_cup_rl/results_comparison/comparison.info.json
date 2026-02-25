@@ -1,7 +1,7 @@
 {
     "methods": [
-        "QRM",
-        "QRM+PBRS",
+        "BEQRM",
+        "BEQRM+PBRS",
         "HRL",
         "HRL-RM",
         "DDQN"

@@ -1,12 +1,12 @@
 """
-5-Way Comparison Runner — QRM vs QRM+PBRS vs HRL vs HRL-RM vs DDQN on the Chop Cup.
+5-Way Comparison Runner — BEQRM vs BEQRM+PBRS vs HRL vs HRL-RM vs DDQN on the Chop Cup.
 
 Trains all five agents on the same environment, evaluates periodically,
 and generates side-by-side comparison plots.
 
 Methods compared:
-  1. QRM      — Q-Learning for Reward Machines (epistemic obs + RM, flat actions)
-  2. QRM+PBRS — QRM with Potential-Based Reward Shaping (Ng et al., 1999)
+  1. BEQRM      — Belief-Epistemic Q-learning for Reward Machines (epistemic obs + RM, flat actions)
+  2. BEQRM+PBRS — BEQRM with Potential-Based Reward Shaping (Ng et al., 1999)
   3. HRL      — Hierarchical RL with options (physical obs only, no RM)
   4. HRL-RM   — Hierarchical RL + epistemic obs + RM (best of both)
   5. DDQN     — Double Deep Q-Network (neural network, epistemic obs + RM)
@@ -664,17 +664,17 @@ def plot_comparison(
         "pbrs": "#9C27B0",   # purple — QRM + PBRS
         "hrl":  "#FF9800",   # orange
         "herl": "#4CAF50",   # green
-        "ddqn": "#E91E63",   # pink
+        "ddqn": "#D32F2F",   # red
     }
     labels = {
-        "qrm":  "QRM",
-        "pbrs": "QRM+PBRS",
+        "qrm":  "BEQRM",
+        "pbrs": "BEQRM+PBRS",
         "hrl":  "HRL",
         "herl": "HRL-RM",
         "ddqn": "DDQN",
     }
 
-    # Build datasets list
+    # Build datasets list (HRL excluded — only BEQRM variants, HRL-RM, DDQN)
     all_datasets = [
         (q_ep, qrm_data, "qrm"),
     ]
@@ -682,7 +682,6 @@ def plot_comparison(
         p_ep = np.array(pbrs_data[0])
         all_datasets.append((p_ep, pbrs_data, "pbrs"))
     all_datasets += [
-        (r_ep, hrl_data, "hrl"),
         (h_ep, herl_data, "herl"),
     ]
     if ddqn_data is not None:
@@ -746,9 +745,9 @@ def plot_comparison(
     _plot_metric(axes[0, 1], 1, "Mean Reward", "Total Reward", clip=(0, None))
     _plot_metric(axes[1, 0], 2, "Mean Steps", "Episode Length")
 
-    # 4th panel: reward gap (QRM − others)
+    # 4th panel: reward gap (BEQRM − others)
     ax = axes[1, 1]
-    all_rw = [q_rw, r_rw, h_rw]
+    all_rw = [q_rw, h_rw]
     if pbrs_data is not None:
         all_rw.append(pbrs_data[3])
     if ddqn_data is not None:
@@ -758,15 +757,13 @@ def plot_comparison(
     if pbrs_data is not None:
         p_rw = pbrs_data[3]
         gap_pbrs = np.array(q_rw[:min_len]) - np.array(p_rw[:min_len])
-        ax.plot(ep_c, gap_pbrs, color=colors["pbrs"], linewidth=2, label="QRM − QRM+PBRS")
-    gap_hrl  = np.array(q_rw[:min_len]) - np.array(r_rw[:min_len])
+        ax.plot(ep_c, gap_pbrs, color=colors["pbrs"], linewidth=2, label="BEQRM − BEQRM+PBRS")
     gap_herl = np.array(q_rw[:min_len]) - np.array(h_rw[:min_len])
-    ax.plot(ep_c, gap_hrl,  color=colors["hrl"],  linewidth=2, label="QRM − HRL")
-    ax.plot(ep_c, gap_herl, color=colors["herl"], linewidth=2, label="QRM − HRL-RM")
+    ax.plot(ep_c, gap_herl, color=colors["herl"], linewidth=2, label="BEQRM − HRL-RM")
     if ddqn_data is not None:
         d_rw = ddqn_data[3]
         gap_ddqn = np.array(q_rw[:min_len]) - np.array(d_rw[:min_len])
-        ax.plot(ep_c, gap_ddqn, color=colors["ddqn"], linewidth=2, label="QRM − DDQN")
+        ax.plot(ep_c, gap_ddqn, color=colors["ddqn"], linewidth=2, label="BEQRM − DDQN")
     ax.axhline(y=0, color="gray", linestyle="--", alpha=0.5)
     ax.set_title("Reward Gap", fontsize=12)
     ax.set_xlabel("Training Episode")
@@ -774,7 +771,7 @@ def plot_comparison(
     ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3)
 
-    title = "Chop Cup — 5-Way Comparison"
+    title = "Chop Cup — 4-Way Comparison"
     fig.suptitle(title, fontsize=14, fontweight="bold")
     fig.tight_layout()
     fig.savefig(out / "comparison_dashboard.png", dpi=150)
@@ -854,7 +851,7 @@ def save_stats_excel(all_method_data: Dict[str, List[Dict]], path: Path) -> None
 
 def main():
     parser = argparse.ArgumentParser(
-        description="4-way comparison: QRM vs HRL vs HRL-RM vs DDQN on the Chop Cup."
+        description="5-way comparison: BEQRM vs BEQRM+PBRS vs HRL vs HRL-RM vs DDQN on the Chop Cup."
     )
     parser.add_argument("--episodes", type=int, default=1000)
     parser.add_argument("--eval-interval", type=int, default=10)
@@ -888,7 +885,7 @@ def main():
     )
 
     print("=" * 70)
-    print("  Chop Cup — QRM vs QRM+PBRS vs HRL vs HRL-RM vs DDQN")
+    print("  Chop Cup — BEQRM vs BEQRM+PBRS vs HRL vs HRL-RM vs DDQN")
     print("=" * 70)
     print(f"  Episodes:     {args.episodes}")
     print(f"  Max steps:    {args.max_steps}")
@@ -899,7 +896,7 @@ def main():
     print("=" * 70)
 
     # --- 1. QRM (user's method) ---
-    print("\n  [1/5] Training QRM (epistemic + Reward Machine, flat actions)...")
+    print("\n  [1/5] Training BEQRM (epistemic + Reward Machine, flat actions)...")
     qrm_data = run_multi_seed(
         train_qrm,
         num_seeds=args.seeds,
@@ -909,7 +906,7 @@ def main():
     print(f"    Final success: {qrm_data[1][-1]:.2%}  |  reward: {qrm_data[3][-1]:.1f}")
 
     # --- 2. QRM + PBRS ---
-    print("\n  [2/5] Training QRM+PBRS (QRM + potential-based reward shaping)...")
+    print("\n  [2/5] Training BEQRM+PBRS (BEQRM + potential-based reward shaping)...")
     pbrs_data = run_multi_seed(
         train_qrm_pbrs,
         num_seeds=args.seeds,
@@ -952,8 +949,8 @@ def main():
 
     # --- Save per-method CSV ---
     all_method_rows = {}
-    for data, name, label in [(qrm_data, "qrm", "QRM"),
-                               (pbrs_data, "qrm_pbrs", "QRM+PBRS"),
+    for data, name, label in [(qrm_data, "qrm", "BEQRM"),
+                               (pbrs_data, "qrm_pbrs", "BEQRM+PBRS"),
                                (hrl_data, "hrl", "HRL"),
                                (herl_data, "herl_qrm", "HRL-RM"),
                                (ddqn_data, "ddqn", "DDQN")]:
@@ -969,7 +966,7 @@ def main():
 
     # --- Info JSON ---
     info = {
-        "methods": ["QRM", "QRM+PBRS", "HRL", "HRL-RM", "DDQN"],
+        "methods": ["BEQRM", "BEQRM+PBRS", "HRL", "HRL-RM", "DDQN"],
         "episodes": args.episodes,
         "max_steps": args.max_steps,
         "max_limes": args.max_limes,
@@ -1005,8 +1002,8 @@ def main():
     print("-" * 70)
     print(f"  {'Method':<25} {'Success':>10} {'Reward':>10} {'Length':>10}")
     print("-" * 70)
-    for label, data in [("QRM", qrm_data),
-                        ("QRM+PBRS", pbrs_data),
+    for label, data in [("BEQRM", qrm_data),
+                        ("BEQRM+PBRS", pbrs_data),
                         ("HRL", hrl_data),
                         ("HRL-RM", herl_data),
                         ("DDQN", ddqn_data)]:

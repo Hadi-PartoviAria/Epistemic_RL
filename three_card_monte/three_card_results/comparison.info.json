@@ -1,0 +1,24 @@
+{
+    "domain": "Three-Card Monte",
+    "methods": [
+        "BEQRM",
+        "HRL-RM",
+        "DDQN"
+    ],
+    "episodes": 1000,
+    "max_steps": 50,
+    "discount": 0.9,
+    "lr": 0.05,
+    "epsilon": 0.1,
+    "meta_epsilon": 0.2,
+    "seeds": 5,
+    "base_seed": 42,
+    "eval_interval": 10,
+    "eval_episodes": 50,
+    "qrm_final_success": 1.0,
+    "herl_final_success": 1.0,
+    "ddqn_final_success": 0.324,
+    "qrm_final_reward": 6.8,
+    "herl_final_reward": 6.6,
+    "ddqn_final_reward": 0.324
+}

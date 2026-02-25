@@ -19,42 +19,84 @@
 \@writefile{toc}{\contentsline {section}{\numberline {3}Technical Framework}{2}{section.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.1}State Representation}{2}{subsection.3.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Epistemic Logic Engine}{2}{subsection.3.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.2.1}Common Ground ($\ensuremath  {\mathit  {CG}}$)}{3}{subsubsection.3.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.2.1}Common Ground ($\ensuremath  {\mathit  {CG}}$)}{2}{subsubsection.3.2.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {3.2.2}Explicit Beliefs ($\ensuremath  {\Delta \phi }$)}{3}{subsubsection.3.2.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {3.2.3}Implicit Beliefs ($\ensuremath  {\Box \phi }$) via SAT Entailment}{3}{subsubsection.3.2.3}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Implicit Belief Query via SAT Entailment}}{3}{algorithm.1}\protected@file@percent }
 \citation{icarte2018}
-\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Implicit Belief Query via SAT Entailment}}{4}{algorithm.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {4}Reward Machine}{4}{section.4}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.1}RM States}{4}{subsection.4.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}RM Automaton Diagram}{5}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}RM Automaton Diagram}{4}{subsection.4.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Condition-Based Transitions}{5}{subsection.4.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Reward Structure}{5}{subsection.4.4}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.5}State Space and Action Space}{5}{subsection.4.5}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {4.5.1}Action Space}{5}{subsubsection.4.5.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.5.2}State Space}{6}{subsubsection.4.5.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5}Results}{6}{section.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Training Configuration}{6}{subsection.5.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Learning Curve}{6}{subsection.5.2}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces QRM reward curve with the updated 6-state RM ($r_{\text  {ball}} = +1$, $r_{\text  {lime}} = +10$, no terminal state).}}{7}{figure.1}\protected@file@percent }
-\newlabel{fig:reward_new_rm}{{1}{7}{QRM reward curve with the updated 6-state RM ($r_{\text {ball}} = +1$, $r_{\text {lime}} = +10$, no terminal state)}{figure.1}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.2.1}Extended Run: 5 Limes, 100 Steps}{7}{subsubsection.5.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.5.2}State Space}{5}{subsubsection.4.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Convergence of Epistemic QRM}{6}{section.5}\protected@file@percent }
+\newlabel{sec:convergence}{{5}{6}{Convergence of Epistemic QRM}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Epistemic Cross-Product MDP}{6}{subsection.5.1}\protected@file@percent }
+\newlabel{def:epi-mdp}{{5.1}{6}{Epistemic MDP with Reward Machine}{theorem.5.1}{}}
+\newlabel{def:cross-product}{{5.2}{6}{Augmented (Cross-Product) MDP}{theorem.5.2}{}}
+\newlabel{lem:markov}{{5.3}{6}{Markov property}{theorem.5.3}{}}
+\citation{watkins1992}
+\citation{watkins1992}
+\citation{tsitsiklis1994}
+\citation{jaakkola1994}
 \citation{ng1999}
-\citation{sutton1999}
-\citation{vanhasselt2016}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces QRM reward curve with extended budget (\texttt  {max\_steps}\nobreakspace  {}$=100$, \texttt  {max\_limes}\nobreakspace  {}$=5$, 1000 episodes).}}{8}{figure.2}\protected@file@percent }
-\newlabel{fig:reward_5limes}{{2}{8}{QRM reward curve with extended budget (\texttt {max\_steps}~$=100$, \texttt {max\_limes}~$=5$, 1000 episodes)}{figure.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Baseline Comparison}{8}{subsection.5.3}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Success rate comparison: 5-way (5-seed average).}}{9}{figure.3}\protected@file@percent }
-\newlabel{fig:comparison_success}{{3}{9}{Success rate comparison: 5-way (5-seed average)}{figure.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Final performance after 1000 training episodes (5-seed average).}}{9}{table.1}\protected@file@percent }
-\newlabel{tab:comparison}{{1}{9}{Final performance after 1000 training episodes (5-seed average)}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Q-Learning on the Augmented MDP}{7}{subsection.5.2}\protected@file@percent }
+\newlabel{eq:q-update}{{1}{7}{Q-Learning on the Augmented MDP}{equation.5.1}{}}
+\newlabel{thm:convergence}{{5.4}{7}{Convergence of Epistemic QRM}{theorem.5.4}{}}
+\citation{ng1999}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Extension to PBRS}{8}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}Potential-Based Reward Shaping (PBRS)}{8}{subsection.5.4}\protected@file@percent }
+\newlabel{sec:pbrs}{{5.4}{8}{Potential-Based Reward Shaping (PBRS)}{subsection.5.4}{}}
+\newlabel{eq:shaping}{{2}{8}{Potential-Based Reward Shaping (PBRS)}{equation.5.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{Policy invariance theorem (Ng, Harada and Russell, 1999).}{8}{section*.2}\protected@file@percent }
+\newlabel{eq:telescope1}{{3}{8}{Policy invariance theorem (Ng, Harada and Russell, 1999)}{equation.5.3}{}}
+\newlabel{eq:telescope2}{{4}{8}{Policy invariance theorem (Ng, Harada and Russell, 1999)}{equation.5.4}{}}
+\@writefile{toc}{\contentsline {paragraph}{Potential function design.}{9}{section*.3}\protected@file@percent }
+\newlabel{eq:potential}{{5}{9}{Potential function design}{equation.5.5}{}}
+\@writefile{toc}{\contentsline {paragraph}{Concrete shaped rewards.}{9}{section*.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Original reward\nobreakspace  {}$R$, shaping bonus $F = \gamma \Phi (u') - \Phi (u)$, and shaped reward\nobreakspace  {}$R' = R + F$ for each RM transition ($\gamma = 0.9$).}}{9}{table.1}\protected@file@percent }
+\newlabel{tab:shaped_rewards}{{1}{9}{Original reward~$R$, shaping bonus $F = \gamma \Phi (u') - \Phi (u)$, and shaped reward~$R' = R + F$ for each RM transition ($\gamma = 0.9$)}{table.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{Effect on learning.}{9}{section*.5}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Success rate comparison: 5-way (5-seed average).}}{10}{figure.1}\protected@file@percent }
+\newlabel{fig:comparison_success}{{1}{10}{Success rate comparison: 5-way (5-seed average)}{figure.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Final performance after 1000 training episodes (5-seed average).}}{10}{table.2}\protected@file@percent }
+\newlabel{tab:comparison}{{2}{10}{Final performance after 1000 training episodes (5-seed average)}{table.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Case Study 2: Three-Card Monte}{10}{section.6}\protected@file@percent }
+\newlabel{sec:three-card-monte}{{6}{10}{Case Study 2: Three-Card Monte}{section.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Domain Description}{10}{subsection.6.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Reward comparison: 5-way (5-seed average).}}{11}{figure.2}\protected@file@percent }
+\newlabel{fig:comparison_reward}{{2}{11}{Reward comparison: 5-way (5-seed average)}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}State Representation}{11}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.2.1}Physical Fluents}{11}{subsubsection.6.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.2.2}Epistemic Fluents}{11}{subsubsection.6.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.2.3}Common Ground}{12}{subsubsection.6.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.2.4}Implicit Beliefs via SAT Entailment}{12}{subsubsection.6.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Action Space}{12}{subsection.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Reward Machine}{12}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.4.1}RM States}{12}{subsubsection.6.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.4.2}RM Automaton Diagram}{13}{subsubsection.6.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.4.3}Condition-Based Transitions}{13}{subsubsection.6.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.4.4}Reward Structure}{13}{subsubsection.6.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.5}Baseline Comparison}{13}{subsection.6.5}\protected@file@percent }
 \bibcite{engesser2025}{1}
 \bibcite{icarte2018}{2}
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Reward comparison: 5-way (5-seed average).}}{10}{figure.4}\protected@file@percent }
-\newlabel{fig:comparison_reward}{{4}{10}{Reward comparison: 5-way (5-seed average)}{figure.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Three-Card Monte: success rate comparison (3-way, 5-seed average).}}{14}{figure.3}\protected@file@percent }
+\newlabel{fig:tcm_comparison_success}{{3}{14}{Three-Card Monte: success rate comparison (3-way, 5-seed average)}{figure.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Three-Card Monte: final performance after 1000 training episodes (5-seed average, $\alpha =0.05$).}}{14}{table.3}\protected@file@percent }
+\newlabel{tab:tcm_comparison}{{3}{14}{Three-Card Monte: final performance after 1000 training episodes (5-seed average, $\alpha =0.05$)}{table.3}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.5.1}Results}{14}{subsubsection.6.5.1}\protected@file@percent }
 \bibcite{bolander2011}{3}
 \bibcite{rabinowitz2018}{4}
 \bibcite{sutton1999}{5}
 \bibcite{vanhasselt2016}{6}
 \bibcite{ng1999}{7}
-\gdef \@abspage@last{11}
+\bibcite{watkins1992}{8}
+\bibcite{tsitsiklis1994}{9}
+\bibcite{jaakkola1994}{10}
+\bibcite{even-dar2003}{11}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Three-Card Monte: reward comparison (3-way, 5-seed average).}}{15}{figure.4}\protected@file@percent }
+\newlabel{fig:tcm_comparison_reward}{{4}{15}{Three-Card Monte: reward comparison (3-way, 5-seed average)}{figure.4}{}}
+\gdef \@abspage@last{16}
